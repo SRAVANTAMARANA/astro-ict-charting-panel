@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Astro ICT Chart Panel (TradingView)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; background:#f4f7fb; }
+    header { background:#0b3b5a; color:#fff; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+    #wrap { display:flex; height:calc(100vh - 56px); }
+    #chart { flex: 3; background:white; border-right:1px solid #e3e6ea; padding:8px; box-sizing:border-box; }
+    #panel { flex: 1; min-width:320px; padding:12px; box-sizing:border-box; overflow:auto; }
+    .card { background:white; padding:10px; border-radius:8px; margin-bottom:12px; border:1px solid #e6eef6; }
+    .btn { padding:8px 10px; background:#0b7cd1; color:white; border:none; border-radius:6px; cursor:pointer; }
+    input[type=text] { padding:8px; width:120px; box-sizing:border-box; }
+    pre { max-height:220px; overflow:auto; white-space:pre-wrap; word-wrap:break-word; background:#0f1720; color:#bfe6ff; padding:8px; border-radius:6px;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Astro ICT Chart Panel</h1>
+    <div>Status: <span id="status">init</span></div>
+  </header>
+  <div id="wrap">
+    <div id="chart">
+      <div>
+        <label>Symbol <input id="symbol" type="text" value="XAU/USD"/></label>
+        <label>TV Interval <input id="interval" type="text" value="1"/></label>
+        <button class="btn" onclick="loadChart()">Load</button>
+      </div>
+      <div id="tv_container" style="margin-top:12px; height:520px; border:1px solid #eee; border-radius:6px;">
+        <div id="tv_chart"></div>
+        <div id="tv_fallback" style="display:none;">
+          <canvas id="canvasChart" width="900" height="480" style="width:100%; height:520px;"></canvas>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <h4>Console / Raw</h4>
+        <pre id="debug">No data loaded</pre>
+      </div>
+    </div>
+    <div id="panel">
+      <div class="card"><h3>Signals</h3><div id="signals">Loading...</div><button class="btn" onclick="getSignals()">Refresh Signals</button></div>
+      <div class="card"><h3>AI Mentor</h3><div id="mentorText">Loading...</div><button class="btn" onclick="refreshMentor()">Refresh Mentor</button><button class="btn" onclick="speakMentor()">Speak</button></div>
+      <div class="card"><h3>Quick</h3><button class="btn" onclick="getHealth()">Health</button></div>
+    </div>
+  </div>
+
+  <script src="https://s3.tradingview.com/tv.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.17/dist/lightweight-charts.standalone.production.js"></script>
+
+  <script>
+    const BACKEND = location.origin.replace(':3000', ':8000');
+
+    function tvSymbolFromInput(symbolInput) {
+      const s = symbolInput.trim().toUpperCase();
+      if (!s.includes('/')) return "OANDA:" + s.replace(' ', '');
+      const parts = s.split('/');
+      return "OANDA:" + parts[0] + parts[1];
+    }
+
+    function createTVWidget(symbol, intervalStr) {
+      document.getElementById('tv_chart').innerHTML = "";
+      try {
+        new TradingView.widget({
+          container_id: "tv_chart",
+          symbol: symbol,
+          interval: intervalStr,
+          timezone: "Etc/UTC",
+          theme: "Light",
+          style: "1",
+          toolbar_bg: "#f1f3f6",
+          locale: "en",
+          enable_publishing: false,
+          allow_symbol_change: true,
+          studies: ["MACD@tv-basicstudies"]
+        });
+        document.getElementById('tv_fallback').style.display='none';
+        setStatus('TradingView loaded');
+      } catch (e) {
+        console.warn('TradingView failed', e);
+        document.getElementById('tv_fallback').style.display='block';
+        setStatus('fallback');
+      }
+    }
+
+    const canvas = document.getElementById('canvasChart');
+    const chart = LightweightCharts.createChart(canvas, { width: canvas.clientWidth, height: 520 });
+    const candleSeries = chart.addCandlestickSeries();
+
+    async function loadChart(){
+      const raw = document.getElementById('symbol').value;
+      const interval = document.getElementById('interval').value || '1';
+      const tvSym = tvSymbolFromInput(raw);
+      createTVWidget(tvSym, interval);
+      try {
+        const resp = await fetch(`${BACKEND}/ict/candles?symbol=${encodeURIComponent(raw)}&interval=${interval==='1'?'1min':interval+'min'}&limit=100`);
+        const j = await resp.json();
+        if (j.candles) {
+          const data = j.candles.slice().reverse().map(c => ({ time: (isNaN(+c.t) ? c.t : Math.floor(c.t)), open:+c.open, high:+c.high, low:+c.low, close:+c.close }));
+          candleSeries.setData(data);
+          document.getElementById('debug').textContent = JSON.stringify(j,null,2);
+          setStatus('candles loaded');
+        } else {
+          document.getElementById('debug').textContent = JSON.stringify(j,null,2);
+          setStatus('no candles');
+        }
+      } catch(e){
+        document.getElementById('debug').textContent = 'ERROR: ' + e;
+        setStatus('error');
+      }
+    }
+
+    async function getSignals(){
+      const r = await fetch(`${BACKEND}/ict/signals`);
+      const j = await r.json();
+      document.getElementById('signals').innerText = JSON.stringify(j,null,2);
+    }
+
+    async function refreshMentor(){
+      const r = await fetch(`${BACKEND}/ict/ai-mentor`);
+      const j = await r.json();
+      document.getElementById('mentorText').innerText = j.narrative || JSON.stringify(j);
+    }
+
+    function speakMentor(){
+      const text = document.getElementById('mentorText').innerText;
+      if ('speechSynthesis' in window){
+        const u = new SpeechSynthesisUtterance(text);
+        speechSynthesis.cancel(); speechSynthesis.speak(u);
+      } else alert('No speech support');
+    }
+
+    async function getHealth(){
+      const r = await fetch(`${BACKEND}/health`);
+      const j = await r.json();
+      alert('Health: ' + JSON.stringify(j));
+    }
+
+    function setStatus(t){ document.getElementById('status').innerText = t; }
+
+    // init
+    getSignals(); refreshMentor(); setTimeout(loadChart,1500);
+  </script>
+</body>
+</html>

@@ -1,232 +1,360 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Astro ICT Chart Panel (Fixed)</title>
+  <title>Astro ICT Chart Panel</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Lightweight Charts standalone bundle (must be before your app script) -->
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; background:#f7f9fc; color:#111}
-    header{padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #e6eef8}
-    #controls{padding:10px 16px; display:flex; gap:8px; align-items:center}
-    #chart { width:100%; height:520px; }
-    button{padding:6px 10px; cursor:pointer}
-    input,select{padding:6px;border:1px solid #ccc;border-radius:4px}
-    #log {font-size:12px;color:#444;padding:8px 16px; background:#fff; border-top:1px solid #eee; height:120px; overflow:auto;}
+    :root{
+      --bg-light: #ffffff; --fg-light:#222;
+      --bg-dark: #071024; --fg-dark:#dbeafe;
+      --panel-bg-light:#f8fafc; --panel-bg-dark:#071024;
+      --accent: #1d4ed8;
+      --muted: #94a3b8;
+    }
+    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg-light);color:var(--fg-light);}
+    .app{display:flex;height:100vh;flex-direction:row;overflow:hidden;}
+    /* left signals tray */
+    .signals-tray{width:320px;min-width:200px;background:var(--panel-bg-light);border-right:1px solid #e6eef8;padding:12px;box-sizing:border-box;transition:transform .28s ease-in-out;transform:translateX(0);}
+    .signals-tray.hidden{transform:translateX(-100%);}
+    .tray-toggle{position:absolute;left:320px;top:12px;background:var(--accent);color:white;padding:6px;border-radius:6px;cursor:pointer;z-index:50}
+    .content{flex:1;display:flex;flex-direction:column;min-width:0;}
+    .topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #e6eef8;background:var(--panel-bg-light);}
+    .controls input, .controls select, .controls button{padding:6px 8px;border-radius:4px;border:1px solid #cbd5e1}
+    .controls button{background:var(--accent);color:#fff;border:none;cursor:pointer}
+    #chart { flex:1;min-height:300px; position:relative; }
+    .statusbar{height:36px;display:flex;align-items:center;padding:0 12px;gap:12px;border-top:1px solid #e6eef8;font-size:13px;color:var(--muted)}
+    .loader{width:20px;height:20px;border-radius:50%;border:3px solid rgba(0,0,0,0.12);border-top-color:var(--accent);animation:spin 1s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    /* compact buttons */
+    .mini{padding:5px 8px;font-size:13px}
+    /* fullscreen */
+    .fullscreen { position:fixed; top:0;left:0;width:100%;height:100%;z-index:9999;background:var(--bg-light);display:flex;flex-direction:column; }
+    /* dark theme */
+    .dark { background:var(--bg-dark); color:var(--fg-dark);}
+    .dark .topbar{background:rgba(255,255,255,0.02); border-bottom-color: rgba(255,255,255,0.04)}
+    .dark .signals-tray{background: #071022; border-right-color: rgba(255,255,255,0.03)}
+    /* small UI */
+    .signals-list{max-height:calc(100vh - 160px);overflow:auto;padding:4px}
+    .signal{border:1px dashed rgba(0,0,0,0.06);padding:8px;margin:6px 0;border-radius:6px;background:#fff}
+    .dark .signal{background:rgba(255,255,255,0.02);border-color:rgba(255,255,255,0.04)}
+    .muted{color:var(--muted)}
+    .right-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
   </style>
 </head>
 <body>
-  <header>
-    <h3 style="margin:0">Astro ICT Chart Panel</h3>
-    <small style="color:#556;padding-left:8px">(defensive build)</small>
-  </header>
+  <div id="root" class="app">
+    <div id="signals" class="signals-tray">
+      <h3>Signals <small class="muted">AI Mentor</small></h3>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button id="refreshSignals" class="mini">Refresh</button>
+        <button id="showHide" class="mini">Hide</button>
+      </div>
+      <div class="signals-list" id="signalsList">
+        <div class="signal">No signals yet — press Refresh</div>
+      </div>
+    </div>
 
-  <div id="controls">
-    <label>Symbol: <input id="symbol" value="BTCUSDT"></label>
-    <label>Interval:
-      <select id="interval">
-        <option value="1min">1m</option>
-        <option value="5min" selected>5m</option>
-        <option value="15min">15m</option>
-        <option value="1h">1h</option>
-      </select>
-    </label>
-    <button id="loadBtn">Load</button>
-    <button id="fullscreenBtn">Fullscreen</button>
-    <span id="status" style="margin-left:8px;color:#2b6">status: idle</span>
+    <div class="content">
+      <div class="topbar">
+        <div class="controls">
+          <input id="symbolInput" placeholder="Symbol (eg XAUUSD or BTCUSDT)" value="XAUUSD" />
+          <select id="intervalSelect">
+            <option value="1min">1m</option>
+            <option value="5min" selected>5m</option>
+            <option value="15min">15m</option>
+            <option value="1h">1h</option>
+            <option value="1d">1d</option>
+          </select>
+          <button id="loadBtn" class="mini">Load</button>
+          <button id="tvBtn" class="mini">TV</button>
+        </div>
+
+        <div class="right-actions">
+          <label><input id="themeToggle" type="checkbox"/> Dark</label>
+          <button id="fullscreenBtn" class="mini">Fullscreen</button>
+          <div id="miniLoader" style="display:none"><span class="loader"></span></div>
+        </div>
+      </div>
+
+      <div id="chart" aria-label="chart container"></div>
+
+      <div class="statusbar">
+        <div id="statusText">Status: idle</div>
+        <div id="lastFetched" class="muted">—</div>
+      </div>
+    </div>
   </div>
 
-  <div id="chart"></div>
+<script>
+/*
+  ICT Chart Panel frontend
+  - Expects backend endpoints:
+       GET /ict/candles?symbol=XXX&interval=1min&limit=200
+       GET /ict/health
+  - Uses lightweight-charts standalone bundle loaded from CDN
+*/
 
-  <div id="log" aria-live="polite"></div>
+const CANDLES_ENDPOINT = '/ict/candles'; // adjust if your API path is different
+const SIGNALS_ENDPOINT = '/ict/signals'; // optional
+const DEFAULT_LIMIT = 200;
 
-  <!-- Use the standalone bundle so global LightweightCharts is available -->
-  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+const chartDiv = document.getElementById('chart');
+const symbolInput = document.getElementById('symbolInput');
+const intervalSelect = document.getElementById('intervalSelect');
+const loadBtn = document.getElementById('loadBtn');
+const tvBtn = document.getElementById('tvBtn');
+const miniLoader = document.getElementById('miniLoader');
+const statusText = document.getElementById('statusText');
+const lastFetched = document.getElementById('lastFetched');
+const signalsList = document.getElementById('signalsList');
+const signalsTray = document.getElementById('signals');
+const showHide = document.getElementById('showHide');
+const themeToggle = document.getElementById('themeToggle');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
 
-  <script>
-  (function(){
-    const logEl = document.getElementById('log');
-    function log(...args){ console.log(...args); logEl.innerText += args.map(a=> (typeof a === 'object' ? JSON.stringify(a) : String(a)) ).join(' ') + '\n'; logEl.scrollTop = logEl.scrollHeight; }
-    function setStatus(s){ document.getElementById('status').innerText = 'status: ' + s; }
+let chart = null;
+let candleSeries = null;
+let currentThemeDark = false;
 
-    let chart = null;
-    let candleSeries = null;
+/* --- utility: pick createChart safely --- */
+function getCreateChart() {
+  if (window.LightweightCharts && typeof window.LightweightCharts.createChart === 'function') {
+    return window.LightweightCharts.createChart;
+  }
+  if (typeof window.createChart === 'function') {
+    return window.createChart;
+  }
+  return null;
+}
 
-    // helper to obtain createChart function from either global or module style
-    function getCreateChart() {
-      // If using standalone script, LightweightCharts.createChart exists
-      if (window.LightweightCharts && typeof window.LightweightCharts.createChart === 'function') {
-        log('Using global LightweightCharts.createChart');
-        return window.LightweightCharts.createChart;
-      }
-      // If a bundler exposed a createChart symbol globally (rare), try it
-      if (typeof createChart === 'function') {
-        log('Using global createChart');
-        return createChart;
-      }
-      log('No createChart available globally. Ensure you load standalone build (script tag).');
-      return null;
+/* recreate chart safely */
+function recreateChart() {
+  const createChart = getCreateChart();
+  if (!createChart) {
+    console.error('createChart not found. Ensure lightweight-charts standalone bundle is loaded BEFORE this script.');
+    statusText.textContent = 'Error: chart lib not loaded';
+    return;
+  }
+
+  // remove old chart if allowed
+  try {
+    if (chart && typeof chart.remove === 'function') {
+      chart.remove();
+      chart = null;
+      candleSeries = null;
     }
+  } catch(e){ console.warn('chart remove err', e) }
 
-    function recreateChart() {
-      const chartDiv = document.getElementById('chart');
-      if (!chartDiv) {
-        log('chart div not found');
-        return;
-      }
+  // apply theme colors
+  const bg = currentThemeDark ? getComputedStyle(document.documentElement).getPropertyValue('--bg-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--bg-light').trim();
+  const textColor = currentThemeDark ? getComputedStyle(document.documentElement).getPropertyValue('--fg-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--fg-light').trim();
 
-      // remove prior instance if exists
-      try {
-        if (chart && typeof chart.remove === 'function') {
-          chart.remove();
-          chart = null;
-        }
-      } catch(e){
-        log('error removing prior chart', e);
-      }
+  try {
+    chart = createChart(chartDiv, {
+      width: chartDiv.clientWidth,
+      height: chartDiv.clientHeight,
+      layout: {
+        background: { color: bg || (currentThemeDark ? '#071024' : '#ffffff') },
+        textColor: textColor || (currentThemeDark ? '#dbeafe' : '#333')
+      },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false },
+      grid: { vertLines: { visible: false } }
+    });
+  } catch (e) {
+    console.error('createChart() failed', e);
+    statusText.textContent = 'Error: cannot create chart';
+    return;
+  }
 
-      const createChartFunc = getCreateChart();
-      if (!createChartFunc) {
-        log('createChart not available - cannot create chart');
-        setStatus('error (no createChart)');
-        return;
-      }
+  // defensive check
+  if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+    console.error('chart.addCandlestickSeries missing', chart);
+    statusText.textContent = 'Error: addCandlestickSeries not available';
+    return;
+  }
 
-      // create chart instance
-      try {
-        chart = createChartFunc(chartDiv, {
-          width: chartDiv.clientWidth,
-          height: chartDiv.clientHeight,
-          layout: { background: { color: '#ffffff' }, textColor: '#111' },
-          rightPriceScale: { borderVisible: false },
-          timeScale: { borderVisible: false },
-        });
-        log('chart created', !!chart);
-        // validate chart supports addCandlestickSeries
-        if (!chart || typeof chart.addCandlestickSeries !== 'function') {
-          log('chart object does not expose addCandlestickSeries. Chart object:', chart);
-          setStatus('error (invalid chart API)');
-          return;
-        }
-        candleSeries = chart.addCandlestickSeries();
-        log('candlestick series added');
-        setStatus('ready');
-      } catch (err) {
-        console.error(err);
-        log('failed creating chart:', err && err.message ? err.message : err);
-        setStatus('error (create failed)');
-      }
-    }
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#26a69a',
+    downColor: '#ef5350',
+    borderVisible: false,
+    wickUpColor: '#26a69a',
+    wickDownColor: '#ef5350'
+  });
 
-    async function fetchCandles(symbol, interval, limit=200) {
-      const url = `${location.protocol}//${location.hostname}:8000/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
-      log('fetching', url);
-      setStatus('loading');
-      try {
-        const r = await fetch(url);
-        if (!r.ok) {
-          log('fetch status', r.status, r.statusText);
-          setStatus('error (fetch)');
-          return null;
-        }
-        const data = await r.json();
-        return data;
-      } catch(e) {
-        log('fetch error', e);
-        setStatus('error (network)');
-        return null;
-      } finally {
-        // no-op
-      }
-    }
-
-    function formatCandles(rawCandles) {
-      // expects array of {time, open, high, low, close} where time may be ISO string
-      return rawCandles.map(c => {
-        let t = c.time;
-        // if ISO string convert to unix seconds
-        if (typeof t === 'string') {
-          const dt = new Date(t);
-          t = Math.floor(dt.getTime() / 1000);
-        } else if (typeof t === 'number' && String(t).length > 10) {
-          // milliseconds -> seconds
-          t = Math.floor(t / 1000);
-        }
-        return {
-          time: t,
-          open: Number(c.open),
-          high: Number(c.high),
-          low: Number(c.low),
-          close: Number(c.close)
-        };
+  // subscribe to time range changes (optional)
+  if (chart.timeScale && typeof chart.timeScale === 'function') {
+    try {
+      chart.timeScale().subscribeVisibleTimeRangeChange(range => {
+        // placeholder for stats or lazy loading
       });
+    } catch(e){/*ignore*/}
+  }
+
+  statusText.textContent = 'Chart ready';
+}
+
+/* fetch candles from backend */
+async function fetchCandles(symbol, interval, limit=DEFAULT_LIMIT) {
+  miniLoader.style.display = 'inline-block';
+  statusText.textContent = `Loading ${symbol} ${interval} ...`;
+  try {
+    const qs = new URLSearchParams({ symbol, interval, limit });
+    const res = await fetch(`${CANDLES_ENDPOINT}?${qs.toString()}`);
+    if (!res.ok) throw new Error('server returned '+res.status);
+    const payload = await res.json(); // expecting { symbol, candles: [ { time, open, high, low, close, volume }, ... ] }
+    miniLoader.style.display = 'none';
+    statusText.textContent = 'Loaded';
+    lastFetched.textContent = `fetched ${new Date().toLocaleTimeString()}`;
+    return payload;
+  } catch (err) {
+    console.error('fetchCandles error', err);
+    miniLoader.style.display = 'none';
+    statusText.textContent = 'Error loading candles';
+    return null;
+  }
+}
+
+/* load and display */
+async function loadSymbol() {
+  const symbol = (symbolInput.value || '').trim();
+  if (!symbol) return alert('Enter symbol');
+  const interval = intervalSelect.value;
+  // ensure chart exists
+  if (!chart || !candleSeries) recreateChart();
+
+  const data = await fetchCandles(symbol, interval);
+  if (!data || !Array.isArray(data.candles)) {
+    console.warn('invalid candle payload', data);
+    return;
+  }
+
+  // convert times (if API returns ISO string, lightweight-charts accepts string ISO or unix seconds)
+  const mapped = data.candles.map(c => {
+    // expected fields: time (ISO or unix), open, high, low, close, volume
+    let time = c.time;
+    // if numeric ms provided, convert to seconds or ISO — chart accepts ISO strings too
+    if (typeof time === 'number' && time > 1e12) time = new Date(time).toISOString();
+    return { time, open: +c.open, high: +c.high, low: +c.low, close: +c.close, volume: c.volume };
+  });
+
+  try {
+    candleSeries.setData(mapped);
+    // auto-fit time range (optional)
+    try { chart.timeScale().fitContent(); } catch(e) {}
+    statusText.textContent = `Loaded ${mapped.length} candles for ${symbol}`;
+  } catch(e){
+    console.error('setData error', e);
+    statusText.textContent = 'Error setting data';
+  }
+}
+
+/* small tradingview button */
+tvBtn.addEventListener('click', () => {
+  const s = symbolInput.value || 'XAUUSD';
+  // open TradingView's symbol search — this is a simple redirect to TradingView
+  const tvUrl = `https://www.tradingview.com/symbols/${encodeURIComponent(s)}/`;
+  window.open(tvUrl, '_blank');
+});
+
+/* signals (simple demo) */
+async function refreshSignals() {
+  // if you have an endpoint, use SIGNALS_ENDPOINT
+  signalsList.innerHTML = '<div class="signal">Loading signals...</div>';
+  try {
+    // optional: try backend endpoint; fallback to demo
+    const res = await fetch(SIGNALS_ENDPOINT);
+    if (res.ok) {
+      const json = await res.json();
+      renderSignals(json.signals || []);
+      return;
     }
+  } catch(e){ /* ignore fallback */ }
 
-    async function loadData() {
-      if (!candleSeries) {
-        log('No candleSeries - recreating chart');
-        recreateChart();
-        if (!candleSeries) {
-          log('Still no candleSeries, abort load');
-          return;
-        }
-      }
-      const symbol = document.getElementById('symbol').value.trim();
-      const interval = document.getElementById('interval').value;
-      const payload = await fetchCandles(symbol, interval, 500);
-      if (!payload) return;
-      // Some backends return { candles: [...] } or directly an array
-      const raw = Array.isArray(payload) ? payload : (payload.candles || payload.data || []);
-      if (!raw || raw.length === 0) {
-        log('No candles returned', payload);
-        setStatus('no-data');
-        return;
-      }
-      const formatted = formatCandles(raw);
-      try {
-        candleSeries.setData(formatted);
-        log('setData ->', formatted.length, 'points');
-        setStatus('loaded');
-      } catch(e) {
-        log('setData error', e);
-        setStatus('error (setData)');
-      }
-    }
+  // fallback demo
+  renderSignals([
+    { id:1, when: new Date().toISOString(), text: 'Demo SELL signal (mock)' },
+    { id:2, when: new Date().toISOString(), text: 'Demo BUY signal (mock)' }
+  ]);
+}
+function renderSignals(list) {
+  if (!Array.isArray(list) || list.length === 0) {
+    signalsList.innerHTML = '<div class="signal">No signals</div>';
+    return;
+  }
+  signalsList.innerHTML = '';
+  list.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'signal';
+    el.innerHTML = `<div style="font-size:13px;color:var(--muted)">${new Date(s.when||Date.now()).toLocaleString()}</div>
+                    <div style="font-weight:600">${s.text||s.msg||s.title}</div>`;
+    signalsList.appendChild(el);
+  });
+}
 
-    // fullscreen toggle
-    function toggleFullscreen(){
-      const chartDiv = document.getElementById('chart');
-      if (!document.fullscreenElement) {
-        chartDiv.requestFullscreen?.().catch(e=>log('fs error', e));
-      } else {
-        document.exitFullscreen?.();
-      }
-    }
+/* tray toggle */
+showHide.addEventListener('click', () => {
+  const hidden = signalsTray.classList.toggle('hidden');
+  showHide.textContent = hidden ? 'Show' : 'Hide';
+});
 
-    // wire UI
-    document.getElementById('loadBtn').addEventListener('click', ()=> loadData());
-    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+/* theme toggle */
+function applyTheme(dark) {
+  currentThemeDark = !!dark;
+  if (dark) document.body.classList.add('dark'); else document.body.classList.remove('dark');
+  recreateChart();
+}
+themeToggle.addEventListener('change', (e)=> applyTheme(e.target.checked));
 
-    // recreate on resize
-    window.addEventListener('resize', ()=> {
-      const chartDiv = document.getElementById('chart');
-      if (!chart) return;
-      try {
-        chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
-      } catch(e){ log('resize applyOptions error', e); }
-    });
+/* fullscreen */
+fullscreenBtn.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(()=>{ /* ignore */ });
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
+});
 
-    // init after DOM load
-    window.addEventListener('DOMContentLoaded', async () => {
-      log('DOM ready, recreating chart now...');
-      recreateChart();
-      // small delay to ensure backend containers are up when user restarts everything
-      setTimeout(()=>{ loadData(); }, 250);
-    });
+/* resize handling */
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  if (!chart) return;
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=> {
+    try { chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight }); }
+    catch(e){ console.warn('resize apply error', e) }
+  }, 120);
+});
 
-    // expose for debugging
-    window._ict = { recreateChart, loadData, getCreateChart };
+/* init */
+(function init(){
+  // first sanity check that lightweight-charts exists
+  const createChart = getCreateChart();
+  if (!createChart) {
+    console.error('lightweight-charts not available. Please ensure the standalone bundle script is included before this script.');
+    statusText.textContent = 'Error: chart library missing';
+    return;
+  }
 
-  })();
-  </script>
+  recreateChart();
+  // wire buttons
+  loadBtn.addEventListener('click', loadSymbol);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && document.activeElement === symbolInput) loadSymbol();
+  });
+
+  document.getElementById('refreshSignals').addEventListener('click', refreshSignals);
+
+  // load initial data
+  refreshSignals();
+  loadSymbol();
+
+})();
+</script>
 </body>
 </html>

@@ -1,279 +1,354 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Astro ICT Chart Panel - standalone test</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    html,body { height:100%; margin:0; font-family: Arial, Helvetica, sans-serif; }
-    #root { display:flex; height:100%; gap:12px; padding:12px; box-sizing:border-box; background:#f8fafc; }
-    #left { width:72%; min-width:480px; background:#fff; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.06); display:flex; flex-direction:column; }
-    #chart { flex:1; min-height:360px; }
-    #controls { padding:8px 12px; display:flex; gap:8px; align-items:center; border-top:1px solid #eef2f7; }
-    .btn { padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
-    #right { width:28%; min-width:240px; background:#fff; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.06); padding:12px; box-sizing:border-box; }
-    .muted { color:#6b7280; font-size:13px; }
-    pre { background:#0b1220; color:#dbeafe; padding:8px; border-radius:6px; overflow:auto; max-height:240px; }
-    .error { color: #ff5555; }
-  </style>
-</head>
-<body>
-  <div id="root">
-    <div id="left">
-      <div id="chart"></div>
-      <div id="controls">
-        <select id="symbol" class="btn">
-          <option value="XAUUSD">XAUUSD</option>
-          <option value="BTCUSDT">BTCUSDT</option>
-          <option value="EURUSD">EURUSD</option>
-        </select>
-        <select id="interval" class="btn">
-          <option value="1min">1m</option>
-          <option value="5min" selected>5m</option>
-          <option value="1h">1h</option>
-          <option value="1d">1d</option>
-        </select>
-        <button id="loadBtn" class="btn">Load</button>
-        <button id="tvBtn" class="btn">Open TV</button>
-        <span id="status" class="muted">status: idle</span>
-      </div>
-    </div>
-
-    <div id="right">
-      <div class="muted">Signals / Logs</div>
-      <pre id="log">ready.</pre>
-    </div>
-  </div>
-
-  <!-- Load the library directly with a script tag -->
-  <script src="https://unpkg.com/lightweight-charts@3.7.0/dist/lightweight-charts.standalone.production.js"></script>
-  
-  <!-- Our application code -->
-  <script>
-  // Wait for the library to load
-  window.addEventListener('load', function() {
-    // Check if the library is loaded
-    if (typeof LightweightCharts === 'undefined') {
-      document.getElementById('log').textContent += '\nERROR: LightweightCharts library not loaded!';
-      document.getElementById('status').textContent = 'status: error';
-      return;
-    }
-    
-    // --- helpers / config ---
-    const chartDiv = document.getElementById('chart');
-    const statusEl = document.getElementById('status');
-    const logEl = document.getElementById('log');
-    const symbolSel = document.getElementById('symbol');
-    const intervalSel = document.getElementById('interval');
-    const loadBtn = document.getElementById('loadBtn');
-    const tvBtn = document.getElementById('tvBtn');
-
-    function log(msg, isError = false) { 
-      logEl.textContent += '\n' + msg; 
-      logEl.scrollTop = 1e9;
-      if (isError) {
-        logEl.classList.add('error');
-      }
-    }
-    
-    function setStatus(s) { statusEl.textContent = 'status: ' + s; }
-
-    // --- chart state ---
-    let chart = null;
-    let candleSeries = null;
-
-    // create or recreate chart
-    function createOrRecreateChart(themeDark = false) {
-      try {
-        if (chart) {
-          // remove old chart
-          try { chart.remove(); } catch(e) { log('Error removing chart: ' + e.message, true); }
-          chart = null;
-          candleSeries = null;
-        }
-
-        const layout = {
-          background: { color: themeDark ? '#0b1220' : '#ffffff' },
-          textColor: themeDark ? '#dbeafe' : '#333',
-          fontSize: 12,
-          fontFamily: "Arial"
-        };
-
-        // Create chart using the correct API
-        chart = LightweightCharts.createChart(chartDiv, {
-          width: chartDiv.clientWidth,
-          height: chartDiv.clientHeight,
-          layout,
-          rightPriceScale: { borderVisible: false },
-          timeScale: { borderVisible: false },
-        });
-
-        // Debug: Check chart object
-        log('Chart object created. Type: ' + typeof chart);
-        log('Chart methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(chart)).join(', '));
-
-        // Check if chart was created successfully and has the required method
-        if (!chart) {
-          throw new Error('Failed to create chart object');
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Chart Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f7fa;
+            color: #333;
         }
         
-        if (typeof chart.addCandlestickSeries !== 'function') {
-          throw new Error('Chart object does not have addCandlestickSeries method');
+        .container {
+            display: flex;
+            height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+            gap: 20px;
         }
+        
+        .chart-container {
+            flex: 1;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 500px;
+        }
+        
+        .chart-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .chart-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        select, button {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background-color: white;
+            cursor: pointer;
+        }
+        
+        button {
+            background-color: #4a6cf7;
+            color: white;
+            border: none;
+        }
+        
+        button:hover {
+            background-color: #3a5ce5;
+        }
+        
+        #chart {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .log-container {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .status.idle {
+            background-color: #f0f9ff;
+            color: #0369a1;
+        }
+        
+        .status.loading {
+            background-color: #fffbeb;
+            color: #b45309;
+        }
+        
+        .status.success {
+            background-color: #f0fdf4;
+            color: #15803d;
+        }
+        
+        .status.error {
+            background-color: #fef2f2;
+            color: #b91c1c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="chart-container">
+            <div class="chart-header">
+                <div class="chart-title">Financial Chart</div>
+                <div class="chart-controls">
+                    <select id="symbol">
+                        <option value="XAUUSD">XAUUSD</option>
+                        <option value="BTCUSDT">BTCUSDT</option>
+                        <option value="EURUSD">EURUSD</option>
+                    </select>
+                    <select id="interval">
+                        <option value="1min">1m</option>
+                        <option value="5min" selected>5m</option>
+                        <option value="1h">1h</option>
+                        <option value="1d">1d</option>
+                    </select>
+                    <button id="loadBtn">Load Data</button>
+                    <button id="tvBtn">Open TradingView</button>
+                </div>
+            </div>
+            <div id="chart"></div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="sidebar-title">Logs</div>
+            <div id="log" class="log-container">Ready to load data...</div>
+            <div id="status" class="status idle">Status: Idle</div>
+        </div>
+    </div>
 
-        // add candlestick series via API on the created chart object
-        candleSeries = chart.addCandlestickSeries({
-          upColor: '#26a69a',
-          downColor: '#ef5350',
-          wickColor: '#737375',
-          borderVisible: true
+    <!-- Lightweight Charts Library -->
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if the library is loaded
+            if (typeof LightweightCharts === 'undefined') {
+                document.getElementById('log').textContent = 'ERROR: LightweightCharts library not loaded!';
+                document.getElementById('status').textContent = 'Status: Error';
+                document.getElementById('status').className = 'status error';
+                return;
+            }
+            
+            // DOM Elements
+            const chartElement = document.getElementById('chart');
+            const logElement = document.getElementById('log');
+            const statusElement = document.getElementById('status');
+            const symbolSelect = document.getElementById('symbol');
+            const intervalSelect = document.getElementById('interval');
+            const loadButton = document.getElementById('loadBtn');
+            const tvButton = document.getElementById('tvBtn');
+            
+            // Chart variables
+            let chart = null;
+            let candlestickSeries = null;
+            
+            // Log function
+            function log(message, isError = false) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logMessage = `[${timestamp}] ${message}\n`;
+                logElement.textContent += logMessage;
+                logElement.scrollTop = logElement.scrollHeight;
+                
+                if (isError) {
+                    statusElement.textContent = 'Status: Error';
+                    statusElement.className = 'status error';
+                }
+            }
+            
+            // Update status function
+            function updateStatus(status, type = 'idle') {
+                statusElement.textContent = `Status: ${status}`;
+                statusElement.className = `status ${type}`;
+            }
+            
+            // Create chart function
+            function createChart() {
+                try {
+                    // Remove existing chart if any
+                    if (chart) {
+                        chart.remove();
+                        chart = null;
+                        candlestickSeries = null;
+                    }
+                    
+                    // Create new chart
+                    chart = LightweightCharts.createChart(chartElement, {
+                        width: chartElement.clientWidth,
+                        height: chartElement.clientHeight,
+                        layout: {
+                            backgroundColor: '#ffffff',
+                            textColor: '#333',
+                        },
+                        grid: {
+                            vertLines: {
+                                color: '#f0f0f0',
+                            },
+                            horzLines: {
+                                color: '#f0f0f0',
+                            },
+                        },
+                        timeScale: {
+                            borderVisible: false,
+                        },
+                        rightPriceScale: {
+                            borderVisible: false,
+                        },
+                        crosshair: {
+                            mode: LightweightCharts.CrosshairMode.Normal,
+                        },
+                    });
+                    
+                    // Add candlestick series
+                    candlestickSeries = chart.addCandlestickSeries({
+                        upColor: '#26a69a',
+                        downColor: '#ef5350',
+                        borderDownColor: '#ef5350',
+                        borderUpColor: '#26a69a',
+                        wickDownColor: '#ef5350',
+                        wickUpColor: '#26a69a',
+                    });
+                    
+                    log('Chart created successfully');
+                    updateStatus('Chart created', 'success');
+                    return true;
+                } catch (error) {
+                    log(`Error creating chart: ${error.message}`, true);
+                    console.error(error);
+                    return false;
+                }
+            }
+            
+            // Generate sample data
+            function generateSampleData() {
+                const data = [];
+                let time = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+                
+                let value = Math.random() * 100 + 100; // Random starting value between 100-200
+                
+                for (let i = 0; i < 100; i++) {
+                    const open = value;
+                    const change = (Math.random() - 0.5) * 5;
+                    const close = value + change;
+                    const high = Math.max(open, close) + Math.random() * 2;
+                    const low = Math.min(open, close) - Math.random() * 2;
+                    
+                    data.push({
+                        time: time.getTime() / 1000, // Convert to Unix timestamp
+                        open: open,
+                        high: high,
+                        low: low,
+                        close: close,
+                    });
+                    
+                    value = close;
+                    time = new Date(time.getTime() + 5 * 60 * 1000); // Add 5 minutes
+                }
+                
+                return data;
+            }
+            
+            // Load data function
+            async function loadData() {
+                const symbol = symbolSelect.value;
+                const interval = intervalSelect.value;
+                
+                updateStatus('Loading data', 'loading');
+                log(`Loading data for ${symbol} with interval ${interval}`);
+                
+                try {
+                    // In a real application, you would fetch data from your API
+                    // For this example, we'll generate sample data
+                    const sampleData = generateSampleData();
+                    
+                    // Set data to the chart
+                    candlestickSeries.setData(sampleData);
+                    
+                    // Fit content
+                    chart.timeScale().fitContent();
+                    
+                    log(`Data loaded successfully for ${symbol}`);
+                    updateStatus('Data loaded', 'success');
+                } catch (error) {
+                    log(`Error loading data: ${error.message}`, true);
+                    console.error(error);
+                }
+            }
+            
+            // Event listeners
+            loadButton.addEventListener('click', loadData);
+            
+            tvButton.addEventListener('click', function() {
+                window.open('https://www.tradingview.com/chart/', '_blank');
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                if (chart) {
+                    chart.applyOptions({
+                        width: chartElement.clientWidth,
+                        height: chartElement.clientHeight,
+                    });
+                }
+            });
+            
+            // Initialize the application
+            function init() {
+                log('Initializing application...');
+                
+                if (createChart()) {
+                    loadData();
+                }
+            }
+            
+            // Start the application
+            init();
         });
-
-        if (!candleSeries) {
-          throw new Error('Failed to create candlestick series');
-        }
-
-        chart.timeScale().subscribeVisibleTimeRangeChange(range => {
-          // called when user changes zoom/scroll; you can update stats here
-          // console.log('visible range changed', range);
-        });
-
-        setStatus('chart created');
-        log('Chart created successfully');
-      } catch (err) {
-        setStatus('error creating chart');
-        log('createChart error: ' + (err && err.message ? err.message : String(err)), true);
-        console.error(err);
-      }
-    }
-
-    // resize handler
-    window.addEventListener('resize', () => {
-      if (!chart) return;
-      chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
-    });
-
-    // fetch candles from backend
-    async function fetchCandles(symbol, interval, limit = 200) {
-      // Replace this path with your backend endpoint if different
-      const url = `/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
-      setStatus('fetching ' + symbol + ' ' + interval);
-      try {
-        const resp = await fetch(url, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
-        const data = await resp.json();
-        // expect data.candles or data array. Accept both shapes:
-        if (Array.isArray(data)) return data;
-        if (Array.isArray(data.candles)) return data.candles;
-        // if server response wrapper different, attempt to extract
-        return data;
-      } catch (err) {
-        log('fetch error: ' + err.message, true);
-        throw err;
-      }
-    }
-
-    // minimal fallback sample candles if backend not available
-    function sampleCandles() {
-      return [
-        {time: '2025-09-23T15:35:00Z', open: 1930, high:1935, low:1927, close:1932, volume:10},
-        {time: '2025-09-23T15:40:00Z', open: 1932, high:1936, low:1930, close:1934, volume:8},
-        {time: '2025-09-23T15:45:00Z', open: 1934, high:1938, low:1931, close:1936, volume:12},
-        {time: '2025-09-23T15:50:00Z', open: 1936, high:1940, low:1934, close:1939, volume:15},
-      ];
-    }
-
-    // normalize server candle objects to lightweight-charts input:
-    // time should be either unix seconds (number) or ISO string 'YYYY-MM-DDTHH:mm:ssZ'
-    function normalizeCandles(raw) {
-      if (!Array.isArray(raw)) return [];
-      return raw.map(c => {
-        // accept both {t,open,high,low,close,volume} or {time,open,high...} or {dt, o,h,l,c}
-        const time = c.time || c.t || c.dt || c.timestamp || c.date || null;
-        // if numeric timestamp (ms) convert to ISO seconds string:
-        if (typeof time === 'number') {
-          // assume ms -> convert to seconds (UNIX) or to ISO string accepted by library
-          const maybeMs = time > 1e12; // ms
-          if (maybeMs) {
-            return { time: new Date(time).toISOString(), open: +c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
-          } else {
-            // seconds
-            return { time: time, open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
-          }
-        } else if (typeof time === 'string') {
-          // if it's already an ISO or date-like string, pass through
-          return { time: time, open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
-        } else {
-          // fallback: use index time -> not ideal
-          return { time: new Date().toISOString(), open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
-        }
-      });
-    }
-
-    async function loadAndRender() {
-      if (!candleSeries) {
-        log('Error: Candlestick series not initialized', true);
-        return;
-      }
-
-      const symbol = symbolSel.value || 'XAUUSD';
-      const interval = intervalSel.value || '5min';
-      try {
-        setStatus('loading ' + symbol);
-        log('loading ' + symbol + ' / ' + interval);
-        let raw;
-        try {
-          raw = await fetchCandles(symbol, interval, 500);
-          log('fetched ' + (Array.isArray(raw) ? raw.length : JSON.stringify(Object.keys(raw))));
-        } catch (err) {
-          log('fetch failed - using sample data');
-          raw = sampleCandles();
-        }
-
-        const data = normalizeCandles(raw);
-        if (!data || data.length === 0) {
-          log('no candle data found; using sample');
-          candleSeries.setData(sampleCandles());
-          setStatus('rendered (sample)');
-          return;
-        }
-
-        candleSeries.setData(data);
-        chart.timeScale().fitContent();
-        setStatus('rendered ' + symbol);
-      } catch (err) {
-        setStatus('render error');
-        log('render error: ' + (err && err.message ? err.message : String(err)), true);
-        console.error(err);
-      }
-    }
-
-    // open tradingview website (lightweight button)
-    tvBtn.addEventListener('click', () => {
-      window.open('https://www.tradingview.com/chart/', '_blank');
-    });
-
-    // attach load button
-    loadBtn.addEventListener('click', loadAndRender);
-
-    // Initialize the application
-    function init() {
-      log('LightweightCharts version: ' + LightweightCharts.version);
-      log('Available methods: ' + Object.getOwnPropertyNames(LightweightCharts).join(', '));
-      
-      // create chart initially
-      createOrRecreateChart(false);
-
-      // initial load of default symbol
-      loadAndRender();
-      
-      // expose a global for debugging if needed
-      window.__ICT_CHART = { chart, candleSeries, createOrRecreateChart, loadAndRender };
-    }
-
-    // Start the application
-    init();
-  });
-  </script>
+    </script>
 </body>
 </html>

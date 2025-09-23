@@ -59,13 +59,11 @@
     const loadBtn = document.getElementById('loadBtn');
     const tvBtn = document.getElementById('tvBtn');
 
-    function log(msg){ logEl.textContent += '\\n' + msg; logEl.scrollTop = 1e9; }
+    function log(msg){ logEl.textContent += '\n' + msg; logEl.scrollTop = 1e9; }
     function setStatus(s){ statusEl.textContent = 'status: ' + s; }
 
     // 1) find the factory: window.createChart (standalone) or window.LightweightCharts.createChart
-    const factory = window.createChart ||
-                    (window.LightweightCharts && window.LightweightCharts.createChart) ||
-                    null;
+    const factory = window.LightweightCharts?.createChart || window.createChart;
 
     if (!factory) {
       setStatus('lightweight-charts not loaded');
@@ -102,6 +100,11 @@
           timeScale: { borderVisible: false },
         });
 
+        // Check if chart was created successfully before trying to add series
+        if (!chart) {
+          throw new Error('Failed to create chart object');
+        }
+
         // add candlestick series via API on the created chart object
         // (standalone uses the global factory; API is the same)
         candleSeries = chart.addCandlestickSeries({
@@ -110,6 +113,10 @@
           wickColor: '#737375',
           borderVisible: true
         });
+
+        if (!candleSeries) {
+          throw new Error('Failed to create candlestick series');
+        }
 
         chart.timeScale().subscribeVisibleTimeRangeChange(range => {
           // called when user changes zoom/scroll; you can update stats here
@@ -228,17 +235,29 @@
     // attach load button
     loadBtn.addEventListener('click', loadAndRender);
 
-    // create chart initially
-    createOrRecreateChart(false);
+    // Wait for the library to fully load before creating the chart
+    function initializeApp() {
+      // Check if the library is loaded
+      if (window.LightweightCharts || window.createChart) {
+        // create chart initially
+        createOrRecreateChart(false);
 
-    // initial load of default symbol
-    loadAndRender();
+        // initial load of default symbol
+        loadAndRender();
+        
+        // expose a global for debugging if needed
+        window.__ICT_CHART = { chart, candleSeries, createOrRecreateChart, loadAndRender };
 
-    // expose a global for debugging if needed
-    window.__ICT_CHART = { chart, candleSeries, createOrRecreateChart, loadAndRender };
+        // sanity check: is factory available?
+        log('factory:' + (typeof factory === 'function' ? 'ok' : String(factory)));
+      } else {
+        // If not loaded yet, wait and try again
+        setTimeout(initializeApp, 100);
+      }
+    }
 
-    // sanity check: is factory available?
-    log('factory:' + (typeof factory === 'function' ? 'ok' : String(factory)));
+    // Initialize the app
+    initializeApp();
   })();
   </script>
 </body>

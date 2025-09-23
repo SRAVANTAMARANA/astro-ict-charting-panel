@@ -1,8 +1,12 @@
-FROM node:18-alpine
+# frontend/Dockerfile
+FROM node:20-alpine as builder
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+COPY package*.json ./
+RUN npm ci
 COPY . .
-RUN yarn build
-EXPOSE 3000
-CMD ["yarn", "start"]
+RUN npm run build
+
+FROM nginx:stable-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

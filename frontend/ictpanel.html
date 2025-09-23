@@ -2,192 +2,325 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Astro ICT Chart Panel — Dual (Lightweight + TradingView)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Astro ICT Chart Panel - Live</title>
+
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 0; height:100vh; display:flex; flex-direction:column; }
-    header { padding:10px; background:#f4f6f8; display:flex; align-items:center; gap:10px; }
-    #buttons { margin-left:auto; display:flex; gap:8px; }
-    #main { flex:1; display:flex; gap:8px; padding:8px; box-sizing:border-box; }
-    .panel { flex:1; border:1px solid #ddd; border-radius:6px; overflow:hidden; background:white; position:relative; }
-    #chart, #tradingview_container { width:100%; height:100%; }
-    .hidden { display:none; }
-    .note { padding:8px; font-size:13px; color:#666 }
+    :root{
+      --bg-light:#ffffff; --text-light:#111;
+      --bg-dark:#0b1220; --text-dark:#dbeafe;
+      --panel-bg: #f5f7fb;
+      --btn-bg:#0b84ff; --btn-color:#fff;
+    }
+    html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--panel-bg);}
+    .app{display:flex;flex-direction:column;height:100vh;}
+    header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border-bottom:1px solid #ddd;}
+    header h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{padding:6px 10px;border-radius:4px;border:1px solid #ccc;background:var(--btn-bg);color:var(--btn-color);cursor:pointer}
+    button.secondary{background:#eee;color:#111;border:1px solid #ccc}
+    .main{display:flex;flex:1;gap:8px;padding:8px}
+    .left{flex:1;display:flex;flex-direction:column;gap:8px}
+    #chartContainer{flex:1;border:1px solid #ddd;position:relative;overflow:hidden;background:var(--bg-light)}
+    #chartToolbar{position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:6px}
+    .right{width:360px;display:flex;flex-direction:column;gap:8px}
+    .panel{background:#fff;border:1px solid #ddd;padding:8px;height:300px;overflow:auto}
+    .small{font-size:12px}
+    .hidden{display:none}
+    .tvWrap{height:100%;width:100%}
   </style>
+
+  <!-- Lightweight Charts - standalone UMD bundle (production) -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
 </head>
 <body>
+  <div class="app">
+    <header>
+      <h1>Astro ICT Chart Panel</h1>
+      <div class="controls">
+        <label class="small">Symbol:
+          <input id="symbolInput" value="XAUUSD" style="padding:6px;margin-left:6px" />
+        </label>
 
-<header>
-  <h3 style="margin:0">Astro ICT Chart Panel</h3>
-  <div id="buttons">
-    <button id="btn-light">Lightweight Chart</button>
-    <button id="btn-tv">TradingView Chart</button>
-    <button id="btn-refresh">Refresh Chart</button>
+        <select id="intervalSelect" style="padding:6px">
+          <option value="1m">1m</option>
+          <option value="5m" selected>5m</option>
+          <option value="15m">15m</option>
+          <option value="1h">1h</option>
+          <option value="1d">1d</option>
+        </select>
+
+        <button id="loadBtn">Load</button>
+        <button id="toggleTv" class="secondary">Toggle TV</button>
+        <button id="themeBtn" class="secondary">Dark</button>
+        <button id="fullscreenBtn" class="secondary">Fullscreen</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <div class="left">
+        <div id="chartContainer">
+          <div id="chartToolbar" class="small">
+            <span id="status" style="background:#fff;padding:4px;border-radius:4px;border:1px solid #ccc">idle</span>
+          </div>
+
+          <!-- Chart area -->
+          <div id="chart" style="width:100%;height:100%;min-height:380px"></div>
+
+          <!-- TradingView iframe (hidden by default) -->
+          <div id="tv" class="hidden tvWrap" style="position:absolute;left:0;top:0;right:0;bottom:0;background:#fff;z-index:5">
+            <!-- supply your TradingView widget URL below (or paste in input->tradingviewURL) -->
+            <iframe id="tvFrame" src="" style="width:100%;height:100%;border:0"></iframe>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <div class="panel" style="flex:1">
+            <h3 style="margin:0 0 8px 0">Signals</h3>
+            <div id="signals">No signals yet</div>
+          </div>
+
+          <div class="panel" style="width:240px">
+            <h3 style="margin:0 0 8px 0">AI Mentor</h3>
+            <div id="mentor">AI mentor demo text</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="panel">
+          <h3 style="margin:0 0 8px 0">Backend Status</h3>
+          <div id="backendStatus">not checked</div>
+        </div>
+
+        <div class="panel">
+          <h3 style="margin:0 0 8px 0">Logs</h3>
+          <div id="log" style="font-size:12px;color:#333;max-height:240px;overflow:auto"></div>
+        </div>
+      </div>
+    </div>
   </div>
-</header>
-
-<div id="main">
-  <div class="panel" id="lw-panel">
-    <div id="chart"></div>
-    <div class="note">Lightweight Charts (local). If empty, check console for errors.</div>
-  </div>
-  <div class="panel hidden" id="tv-panel">
-    <div id="tradingview_container"></div>
-    <div class="note">TradingView widget embed (external).</div>
-  </div>
-</div>
-
-<!-- Lightweight Charts standalone (non-module) - must load BEFORE our app logic that calls createChart -->
-<script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
-
-<!-- TradingView embeddable (public widget) -->
-<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 
 <script>
-/* app inline - safe startup for lightweight and TradingView toggle */
-(function(){
-  const btnLight = document.getElementById('btn-light');
-  const btnTV = document.getElementById('btn-tv');
-  const btnRefresh = document.getElementById('btn-refresh');
-  const lwPanel = document.getElementById('lw-panel');
-  const tvPanel = document.getElementById('tv-panel');
-  const chartDiv = document.getElementById('chart');
+/*
+  Single-file frontend:
+  - Uses window.createChart from the standalone UMD bundle.
+  - Polls backend /ict/candles for candle data and applies to candlestick series.
+  - Default API_BASE = http://localhost:8000 (adjust if backend port differs).
+*/
 
-  // Keep references for debugging
-  window.__ICT = window.__ICT || {};
+const API_BASE = (window.API_BASE || 'http://localhost:8000'); // change if needed
+const POLL_INTERVAL_MS = 5000; // fetch interval
+let chart = null;
+let candleSeries = null;
+let apiTimer = null;
+let themeDark = false;
 
-  // --- LIGHTWEIGHT CHARTS SAFE START ---
-  async function startLightweight() {
-    // wait for factory to appear (small timeout)
-    let tries = 0;
-    while (tries < 25 && !(window.createChart || (window.LightweightCharts && window.LightweightCharts.createChart))) {
-      await new Promise(r=>setTimeout(r, 100));
-      tries++;
-    }
-    const factory = window.createChart || (window.LightweightCharts && window.LightweightCharts.createChart);
-    if (!factory) {
-      console.error('[ICT] Lightweight factory not found. Make sure standalone bundle loaded.');
-      return;
-    }
+const $ = id => document.getElementById(id);
+const log = (m) => {
+  const el = $('log');
+  el.innerText = (new Date()).toLocaleTimeString() + ' — ' + m + '\n' + el.innerText;
+};
+const setStatus = (s) => { $('status').innerText = s; };
 
-    // Clean previous
-    if (window.__ICT.chart) {
-      try { window.__ICT.chart.remove(); } catch(e){ console.warn('existing chart remove failed', e); }
-      window.__ICT = {};
-    }
+function isoOrEpoch(v){
+  // backend may return ISO time string; library accepts ISO string or object {time: 'YYYY-MM-DDTHH:MM:SSZ'}
+  // we'll pass the same 'time' string returned by backend
+  return v;
+}
 
-    // create chart instance
-    const chart = factory(chartDiv, {
-      width: chartDiv.clientWidth,
-      height: chartDiv.clientHeight,
-      layout: { background: { color: '#ffffff' }, textColor: '#333' },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false }
-    });
-
-    // ensure addCandlestickSeries is available
-    if (typeof chart.addCandlestickSeries !== 'function') {
-      console.error('[ICT] chart.addCandlestickSeries is not a function. chart prototype keys:', Object.getOwnPropertyNames(Object.getPrototypeOf(chart)));
-      return;
-    }
-
-    const candleSeries = chart.addCandlestickSeries();
-    window.__ICT.chart = chart;
-    window.__ICT.candleSeries = candleSeries;
-
-    // Put small demo data (replace with real server data later)
-    candleSeries.setData([
-      { time: '2025-09-23T15:35:00Z', open: 1930, high:1935, low:1927, close:1932 },
-      { time: '2025-09-23T15:40:00Z', open: 1932, high:1936, low:1930, close:1934 },
-      { time: '2025-09-23T15:45:00Z', open: 1934, high:1938, low:1931, close:1936 }
-    ]);
-
-    chart.timeScale().fitContent();
-
-    // handle resize
-    window.addEventListener('resize', ()=> {
-      try {
-        chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
-      } catch(e){}
-    });
-
-    console.log('[ICT] Lightweight chart created and demo candles loaded.');
+function createLightweightChart(){
+  if(!window.createChart){
+    log('ERROR: lightweight-charts not found on window.createChart. Check script include.');
+    setStatus('LW not loaded');
+    return;
   }
 
-  // --- TRADINGVIEW WIDGET START ---
-  function startTradingView() {
-    // If TradingView not yet ready, tv.js sets window.TradingView - check
-    if (typeof window.TradingView === 'undefined') {
-      console.warn('[ICT] TradingView widget script not ready yet.');
-      // still attempt instantiate after short delay
-      setTimeout(startTradingView, 300);
+  const chartDiv = $('chart');
+  if(chart){
+    try{ chart.remove(); }catch(e){ console.warn(e); }
+    chart = null; candleSeries = null;
+  }
+
+  const layout = {
+    background: { color: themeDark? getComputedStyle(document.documentElement).getPropertyValue('--bg-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--bg-light').trim() },
+    textColor: themeDark? getComputedStyle(document.documentElement).getPropertyValue('--text-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--text-light').trim(),
+    fontSize: 12
+  };
+
+  chart = window.createChart(chartDiv, {
+    width: chartDiv.clientWidth,
+    height: chartDiv.clientHeight,
+    layout,
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, rightOffset: 6, barSpacing: 12 },
+    grid: { vertLines: { color: 'rgba(197,197,197,0.06)' }, horzLines: { color: 'rgba(197,197,197,0.06)' } }
+  });
+
+  // create candlestick series
+  try{
+    candleSeries = chart.addCandlestickSeries({
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderVisible: true,
+      wickVisible: true
+    });
+  } catch(err){
+    console.error('Failed addCandlestickSeries:', err);
+    log('Failed addCandlestickSeries: ' + (err && err.message));
+    setStatus('Series error');
+    return;
+  }
+
+  // resize handler
+  window.addEventListener('resize', ()=> {
+    if(chart){
+      chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
+    }
+  });
+
+  setStatus('chart ready');
+  log('Lightweight chart created');
+}
+
+/* Fetch candles from backend and apply to series
+   expects backend endpoint like:
+   GET ${API_BASE}/ict/candles?symbol=XAUUSD&interval=1m&limit=200
+   response: { symbol: "...", candles: [ { time: "...", open: x, high:h, low:l, close:c, volume: v }, ... ] }
+*/
+async function fetchAndApplyCandles(symbol, interval, limit=200){
+  if(!candleSeries){
+    log('No candleSeries available to update');
+    return;
+  }
+  const url = `${API_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+  setStatus('fetching...');
+  try{
+    const res = await fetch(url);
+    if(!res.ok){
+      log('Backend fetch failed: ' + res.status + ' ' + res.statusText);
+      setStatus('backend error');
+      $('backendStatus').innerText = `HTTP ${res.status} ${res.statusText}`;
+      return;
+    }
+    const j = await res.json();
+    // j.candles expected array; convert to chart format.
+    if(!j || !Array.isArray(j.candles)){
+      log('Invalid response format (no candles array)');
+      setStatus('invalid data');
       return;
     }
 
-    // clear container then initialize widget (use public widget config)
-    const container = document.getElementById('tradingview_container');
-    container.innerHTML = '';
-    new TradingView.MediumWidget({
-      "container_id": "tradingview_container",
-      "symbols": [
-        ["XAUUSD|1", "XAUUSD"],
-        ["BTCUSD|1", "BTCUSD"]
-      ],
-      "greyText": "Regular",
-      "gridLineColor": "#e9e9ea",
-      "fontColor": "#83888D",
-      "underLineColor": "#e9e9ea",
-      "trendLineColor": "#2196F3",
-      "width": "100%",
-      "height": "100%",
-      "locale": "en",
-      "dateRange": "3D",
-      "chartType": "line",
-      "autosize": true,
-      "showVolume": false,
-      "hideDateRanges": false,
-      "showMA": false,
-      "showTitle": true,
-      "showSymbolLogo": true,
-      "scalePosition": "right",
-      "scaleMode": "Normal",
-      "fontFamily": "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif",
-      "noTimeScale": false,
-      "valuesTracking": "1"
-    });
-    console.log('[ICT] TradingView widget started.');
-  }
+    // transform backend candles into lightweight format
+    const data = j.candles.map(c => ({
+      time: isoOrEpoch(c.time), // string ISO or yyyy-mm-dd etc.
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low: parseFloat(c.low),
+      close: parseFloat(c.close),
+      volume: c.volume !== undefined ? parseFloat(c.volume) : undefined
+    }));
 
-  // --- UI toggle handlers ---
-  btnLight.onclick = async () => {
-    tvPanel.classList.add('hidden');
-    lwPanel.classList.remove('hidden');
-    // if no chart yet, start
-    if (!window.__ICT.chart) await startLightweight();
-  };
-  btnTV.onclick = () => {
-    lwPanel.classList.add('hidden');
-    tvPanel.classList.remove('hidden');
-    // start tradingview if not present
-    startTradingView();
-  };
-  btnRefresh.onclick = async () => {
-    // refresh whichever view is visible
-    if (!lwPanel.classList.contains('hidden')) {
-      await startLightweight();
+    if(data.length === 0){
+      log('No candles returned from backend');
+      setStatus('no data');
+      return;
+    }
+
+    // Replace series data
+    candleSeries.setData(data);
+    setStatus('data loaded ' + symbol + ' ' + interval + ' (' + data.length + ')');
+    $('backendStatus').innerText = `OK - ${symbol} ${interval} - ${data.length} bars`;
+    log(`Updated series (${symbol} ${interval}) count=${data.length}`);
+  }catch(err){
+    console.error(err);
+    log('Fetch error: ' + (err && err.message));
+    setStatus('fetch error');
+  }
+}
+
+/* Start polling */
+function startPolling(symbol, interval){
+  if(apiTimer) clearInterval(apiTimer);
+  // first immediate fetch
+  fetchAndApplyCandles(symbol, interval);
+  apiTimer = setInterval(()=> fetchAndApplyCandles(symbol, interval), POLL_INTERVAL_MS);
+}
+
+/* UI wiring */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // create chart
+  createLightweightChart();
+
+  // UI nodes
+  const loadBtn = $('loadBtn');
+  const symbolInput = $('symbolInput');
+  const intervalSelect = $('intervalSelect');
+  const toggleTv = $('toggleTv');
+  const tvDiv = $('tv');
+  const tvFrame = $('tvFrame');
+  const themeBtn = $('themeBtn');
+  const fullscreenBtn = $('fullscreenBtn');
+
+  loadBtn.addEventListener('click', ()=>{
+    const symbol = symbolInput.value.trim() || 'XAUUSD';
+    const interval = intervalSelect.value;
+    setStatus('loading ' + symbol);
+    startPolling(symbol, interval);
+  });
+
+  // TradingView toggle - user must paste their widget URL manually if needed
+  toggleTv.addEventListener('click', ()=>{
+    if(tvDiv.classList.contains('hidden')){
+      // show tradingview: if the iframe src is empty, prompt user to paste widget URL
+      if(!tvFrame.src){
+        const url = prompt('Paste TradingView widget URL or iframe src (leave blank to cancel):');
+        if(url){
+          tvFrame.src = url;
+        } else {
+          return;
+        }
+      }
+      tvDiv.classList.remove('hidden');
     } else {
-      startTradingView();
+      tvDiv.classList.add('hidden');
     }
-  };
+  });
 
-  // Start with Lightweight by default (safe)
-  btnLight.click();
+  // theme toggle (only for chart background text colors)
+  themeBtn.addEventListener('click', ()=>{
+    themeDark = !themeDark;
+    themeBtn.innerText = themeDark? 'Light' : 'Dark';
+    createLightweightChart(); // rebuild chart with new theme
+    // restart polling (series will be replaced)
+    const s = symbolInput.value.trim()||'XAUUSD';
+    startPolling(s, intervalSelect.value);
+  });
 
-  // expose quick debug helper
-  window.__ICT.startLightweight = startLightweight;
-  window.__ICT.startTradingView = startTradingView;
+  // fullscreen
+  fullscreenBtn.addEventListener('click', ()=>{
+    const el = $('chartContainer');
+    if(!document.fullscreenElement){
+      el.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+    setTimeout(()=> window.dispatchEvent(new Event('resize')), 300);
+  });
 
-})();
+  // start initial fetch
+  const initialSymbol = $('symbolInput').value || 'XAUUSD';
+  startPolling(initialSymbol, $('intervalSelect').value);
+
+  log('Panel ready');
+});
+
+/* Cleanup before unload */
+window.addEventListener('beforeunload', ()=>{
+  if(apiTimer) clearInterval(apiTimer);
+});
+
 </script>
 </body>
 </html>

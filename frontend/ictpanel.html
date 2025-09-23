@@ -2,576 +2,512 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>Astro ICT Chart Panel — Final</title>
-
-  <!-- Lightweight Charts standalone production bundle -->
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-
+  <title>Astro ICT Chart Panel — Fixed + MA/EMA/FVG</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- Use an explicit lightweight-charts version (production bundle). -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 
   <style>
-    :root{
-      --bg:#f3f7fb;
-      --panel:#ffffff;
-      --accent:#0b57a4;
-      --muted:#7a8a99;
-      --danger:#c0392b;
-    }
-    html,body{height:100%;margin:0;padding:0;font-family:Inter,Segoe UI,Roboto,Arial;}
-    body{background:linear-gradient(180deg,#eaf3ff 0%, #f7fbff 100%);color:#16262f;display:flex;flex-direction:column;min-height:100vh}
+    :root{--bg:#f3f7fb;--panel:#fff;--accent:#0b57a4;--muted:#7a8a99;--good:#0b8a3e;--bad:#c0392b}
+    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial;background:linear-gradient(#eaf3ff,#f7fbff)}
     header{background:var(--accent);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px}
     header h1{margin:0;font-size:18px}
-    #root{display:flex;flex:1;gap:12px;padding:12px;box-sizing:border-box}
-    /* left column (controls + signals) */
-    #left{width:360px;min-width:260px;display:flex;flex-direction:column;gap:12px}
-    .card{background:var(--panel);border-radius:8px;box-shadow:0 6px 14px rgba(11,87,164,0.06);padding:12px;box-sizing:border-box}
-    #controls .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    #root{display:flex;gap:12px;padding:12px}
+    #left{width:360px;min-width:240px;display:flex;flex-direction:column;gap:12px}
+    .card{background:var(--panel);border-radius:8px;padding:12px;box-shadow:0 6px 20px rgba(11,87,164,0.06)}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     input,select,button{font-size:14px;padding:6px 8px;border-radius:6px;border:1px solid #d6e2ef}
     button{background:var(--accent);color:#fff;border:none;cursor:pointer}
     button.secondary{background:#fff;color:var(--accent);border:1px solid #d6e2ef}
     button.ghost{background:transparent;color:var(--accent);border:1px dashed #cfe1fb}
-    #signals{flex:1;overflow:auto}
-    .signal{padding:8px;border-radius:6px;margin-bottom:8px;background:linear-gradient(90deg,#fff,#f8fbff);display:flex;align-items:center;gap:8px}
-    .signal .icon{width:32px;height:32px;border-radius:6px;flex:0 0 32px;display:flex;align-items:center;justify-content:center;background:#eef7ff;color:var(--accent);font-weight:700}
-    .muted{color:var(--muted);font-size:13px}
-    /* right column (chart) */
-    #chartColumn{flex:1;display:flex;flex-direction:column;gap:12px;min-width:320px}
-    #chartCard{display:flex;flex-direction:column;min-height:400px}
-    #chartHeader{display:flex;align-items:center;gap:12px;padding:8px 8px 0 8px}
-    #chartContainer{flex:1;min-height:420px;border-radius:8px;overflow:hidden;position:relative;background:linear-gradient(180deg,#fff,#fcfdff)}
-    #chart{width:100%;height:100%}
-    #floatingInfo{position:absolute;right:12px;top:12px;background:rgba(255,255,255,0.95);padding:8px;border-radius:8px;box-shadow:0 6px 18px rgba(11,87,164,0.06);font-size:13px}
-    /* draggable handle */
-    .drag-handle{height:8px;background:#eef5ff;border-radius:4px;margin-bottom:8px;cursor:grab}
-    /* TV iframe overlay */
-    #tvOverlay{position:absolute;left:0;right:0;top:0;bottom:0;background:#ffffff;display:none;z-index:30}
-    #tvOverlay iframe{width:100%;height:100%;border:0}
-    #tray{position:fixed;right:16px;bottom:16px;background:var(--panel);box-shadow:0 10px 30px rgba(6,29,51,0.12);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:8px;width:320px;max-height:70vh;overflow:auto;transform:translateY(0);transition:transform .25s}
-    #tray.hidden{transform:translateY(110%)}
-    .trayHeader{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    #chartColumn{flex:1;display:flex;flex-direction:column;gap:12px}
+    #chartCard{display:flex;flex-direction:column;min-height:460px}
+    #chart{width:100%;height:520px}
+    #floatingInfo{position:absolute;right:12px;top:12px;background:rgba(255,255,255,0.95);padding:8px;border-radius:8px}
+    #tvOverlay{position:absolute;left:0;right:0;top:0;bottom:0;background:#fff;display:none;z-index:40}
+    #tray{position:fixed;right:16px;bottom:16px;background:var(--panel);box-shadow:0 10px 30px rgba(6,29,51,0.12);border-radius:8px;padding:8px;width:320px;max-height:70vh;overflow:auto;transform:translateY(110%);transition:all .25s}
+    #tray.open{transform:translateY(0)}
     .miniBtn{padding:6px;border-radius:6px;border:1px solid #e4eefb;background:#fff;cursor:pointer}
-    /* full-screen */
-    .fullscreen{position:fixed!important;left:0;top:0;width:100%!important;height:100%!important;z-index:99999;border-radius:0!important;padding:0;margin:0}
-    /* small helpers */
-    .mutedSmall{color:var(--muted);font-size:12px}
-    /* responsive */
+    .muted{color:var(--muted);font-size:13px}
+    pre{background:#f6fbff;padding:8px;border-radius:6px;max-height:200px;overflow:auto}
     @media (max-width:900px){#left{display:none}}
   </style>
 </head>
 <body>
-  <header>
-    <h1>Astro ICT Chart Panel — FINAL</h1>
-    <div class="mutedSmall">Local demo • Make sure backend /ict endpoints are running</div>
-  </header>
+  <header><h1>Astro ICT Chart Panel — Fixed</h1><div class="muted" style="margin-left:8px">Backend must be running &lt;— change BACKEND_BASE if needed</div></header>
 
   <div id="root">
     <div id="left">
-      <div class="card" id="controls">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <strong>Controls</strong>
-          <div class="mutedSmall">Auto-refresh every <span id="autoIntervalLabel">off</span></div>
-        </div>
+      <div class="card">
+        <strong>Controls</strong>
         <div class="row" style="margin-top:8px">
-          <label>Symbol <input id="symbol" value="XAUUSD" /></label>
+          <label>Symbol <input id="symbol" value="XAUUSD"/></label>
           <label>Interval
             <select id="interval">
               <option value="1min">1m</option>
-              <option value="5min">5m</option>
+              <option value="5min" selected>5m</option>
               <option value="15min">15m</option>
-              <option value="30min">30m</option>
               <option value="1h">1h</option>
             </select>
           </label>
-          <label>Limit <input id="limit" type="number" value="200" style="width:100px" /></label>
+          <label>Limit<input id="limit" value="200" style="width:100px" /></label>
         </div>
 
         <div class="row" style="margin-top:8px">
           <button id="loadBtn">Load</button>
           <button id="autoBtn" class="secondary">Auto-refresh</button>
-          <button id="tvBtn" class="ghost">Toggle TV</button>
+          <button id="tvBtn" class="ghost">TV</button>
           <button id="fullscreenBtn" class="secondary">Fullscreen</button>
         </div>
 
-        <div style="margin-top:8px" class="mutedSmall">Status: <span id="status">idle</span></div>
+        <div style="margin-top:8px" class="muted">Status: <span id="status">idle</span></div>
       </div>
 
-      <div class="card" id="signals">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <strong>AI Mentor & Signals</strong>
-          <div><button id="trayToggle" class="miniBtn">Show Tray</button></div>
+      <div class="card">
+        <strong>Indicators</strong>
+        <div class="row" style="margin-top:8px">
+          <label><input type="checkbox" id="maToggle" checked /> MA (20)</label>
+          <label><input type="checkbox" id="emaToggle" checked /> EMA (50)</label>
+          <label><input type="checkbox" id="fvgToggle" /> FVG (simple)</label>
         </div>
-        <div style="margin-top:8px;color:var(--muted)" id="aiText">AI mentor demo text • Refresh to compute zones & signals</div>
-
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <button id="refreshSignals" class="secondary">Refresh Mentor</button>
-          <button id="genSignal" class="ghost">Create Demo Signal</button>
-          <button id="clearSignals" class="ghost">Clear Signals</button>
-        </div>
-
-        <div id="signalsList" style="margin-top:12px"></div>
       </div>
 
-      <div class="card" style="display:flex;gap:8px;align-items:center;">
-        <div style="flex:1">
-          <strong>About</strong>
-          <div class="mutedSmall">Lightweight Charts, trading overlays, draggable panels.</div>
+      <div class="card">
+        <strong>AI & Signals</strong>
+        <div class="muted" style="margin-top:6px">Demo AI mentor + signals tray</div>
+        <div style="margin-top:8px" class="row">
+          <button id="refreshSignals" class="secondary">Refresh</button>
+          <button id="genSignal" class="ghost">Create demo signal</button>
+          <button id="clearSignals" class="ghost">Clear</button>
         </div>
-        <div style="text-align:right">
-          <div class="mutedSmall">Version</div>
-          <strong>1.0-final</strong>
-        </div>
+        <div id="signalsList" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <strong>Logs</strong>
+        <pre id="logPre"></pre>
       </div>
     </div>
 
     <div id="chartColumn">
-      <div id="chartCard" class="card">
-        <div class="drag-handle" title="Drag handle - visual only"></div>
-        <div id="chartHeader">
-          <div style="display:flex;gap:8px;align-items:center;">
-            <div class="mutedSmall">Symbol:</div>
-            <div id="headerSymbol" style="font-weight:700">XAUUSD</div>
-            <div class="mutedSmall" style="margin-left:8px" id="headerInterval">1m</div>
-          </div>
+      <div class="card" id="chartCard">
+        <div style="display:flex;align-items:center;gap:12px;padding-bottom:8px">
+          <div><strong id="headerSymbol">XAUUSD</strong></div>
+          <div class="muted" id="headerInterval">5m</div>
           <div style="flex:1"></div>
-          <div class="mutedSmall">Min/Max: <span id="minmax">$—</span></div>
+          <div class="muted">Min/Max: <span id="minmax">—</span></div>
         </div>
 
-        <div id="chartContainer">
+        <div id="chartContainer" style="position:relative">
           <div id="chart"></div>
+          <div id="tvOverlay"><button id="closeTv" class="miniBtn" style="position:absolute;right:8px;top:8px;z-index:50">Close TV</button><iframe id="tvFrame" style="width:100%;height:100%;border:0"></iframe></div>
 
-          <div id="floatingInfo">
-            <div style="font-size:13px;font-weight:600">Floating:</div>
-            <div class="mutedSmall">Last: <span id="floatingLast">—</span></div>
-            <div class="mutedSmall">Min: <span id="floatingMin">—</span></div>
-            <div class="mutedSmall">Max: <span id="floatingMax">—</span></div>
-            <div style="margin-top:6px">
-              <button id="exportBtn" class="miniBtn">Export CSV</button>
-              <button id="addMarkerBtn" class="miniBtn">Add Marker</button>
-            </div>
+          <div id="floatingInfo" style="position:absolute;top:12px;right:12px;">
+            <div><strong>Floating</strong></div>
+            <div class="muted">Last: <span id="floatingLast">—</span></div>
+            <div class="muted">Min: <span id="floatingMin">—</span></div>
+            <div class="muted">Max: <span id="floatingMax">—</span></div>
+            <div style="margin-top:6px"><button id="exportBtn" class="miniBtn">Export CSV</button> <button id="addMarkerBtn" class="miniBtn">Add Marker</button></div>
           </div>
-
-          <div id="tvOverlay">
-            <div style="position:absolute;right:8px;top:8px;z-index:40;">
-              <button id="closeTv" class="miniBtn">Close TV</button>
-            </div>
-            <iframe id="tvFrame" src="" allowfullscreen></iframe>
-          </div>
-
         </div>
       </div>
 
-      <div id="logs" class="card" style="height:140px;overflow:auto">
-        <strong>Console & Logs</strong>
-        <pre id="logPre" style="font-size:12px;white-space:pre-wrap"></pre>
-      </div>
     </div>
   </div>
 
-  <!-- tray for signals / quick actions -->
-  <div id="tray" class="hidden card">
-    <div class="trayHeader"><strong>Signals Tray</strong><div><button id="trayClose" class="miniBtn">Hide</button></div></div>
-    <div id="trayBody" style="margin-top:8px"></div>
-  </div>
+  <div id="tray" class="card"><div style="display:flex;justify-content:space-between;align-items:center"><strong>Signals Tray</strong><button id="trayToggle" class="miniBtn">Open</button></div><div id="trayBody" style="margin-top:8px"></div></div>
 
 <script>
-/*
-  Final ICT Chart Panel Frontend Script
-  - lightweight-charts for candlesticks
-  - fetches /ict/candles
-  - supports markers (icons), signals tray, fullscreen and TradingView embed
-  - persistent preferences in localStorage
-*/
-
-/* ------------------- Config ------------------- */
-const BACKEND_BASE = (location.hostname === "localhost" || location.hostname === "127.0.0.1") ? "http://localhost:8000" : `${location.protocol}//${location.hostname}:8000`;
+/* ================= CONFIG ================= */
+const BACKEND_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:8000' : `${location.protocol}//${location.hostname}:8000`;
 const DEFAULT_LIMIT = 200;
 
-/* ------------------- Small utils ------------------- */
-const el = id => document.getElementById(id);
-const log = (...a) => {
-  console.log(...a);
-  const l = el('logPre');
-  l.textContent += `[${new Date().toLocaleTimeString()}] ` + a.map(x => (typeof x === 'object'?JSON.stringify(x):x)).join(' ') + "\n";
-  l.scrollTop = l.scrollHeight;
-};
+/* ================= SAFE LWC reference ================= */
+/* Some bundles expose different globals — pick the available one */
+const LWC = window.LightweightCharts || window.lightweightCharts || window.lightweightChartsStandalone || window.lightweightCharts || (window && window['lightweight-charts']);
+if(!LWC){
+  alert('LightweightCharts not found. Check script include.');
+  throw new Error('LightweightCharts not loaded');
+}
 
-/* ------------------- State ------------------- */
+/* ================= Helpers ================= */
+const $ = id => document.getElementById(id);
+const log = (...args) => {
+  console.log(...args);
+  const pre = $('logPre');
+  pre.textContent += `[${new Date().toLocaleTimeString()}] ` + args.map(a => (typeof a==='object'?JSON.stringify(a):a)).join(' ') + "\n";
+  pre.scrollTop = pre.scrollHeight;
+};
+function persistGet(k,d){ try{ const v=JSON.parse(localStorage.getItem(k)); return v===null?d:v }catch(e){ return d } }
+function persistSet(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+/* ================= State ================= */
 let chart = null;
 let candleSeries = null;
-let markers = []; // overlay markers
-let lastCandles = []; // raw candles loaded
+let maSeries = null;
+let emaSeries = null;
+let fvgWidgets = []; // rectangles
+let lastCandles = [];
+let markers = [];
 let autoTimer = null;
 
-/* ------------------- Init UI ------------------- */
-function persistSet(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
-function persistGet(k,def){ try{ const v=JSON.parse(localStorage.getItem(k)); return v===null?def:v }catch(e){return def} }
-
-el('symbol').value = persistGet('ict_symbol','XAUUSD');
-el('interval').value = persistGet('ict_interval','1min');
-el('limit').value = persistGet('ict_limit', DEFAULT_LIMIT);
-el('autoIntervalLabel').textContent = persistGet('ict_auto','off') === 'off' ? 'off' : `${persistGet('ict_auto',0)}s`;
-
-/* ------------------- Chart init ------------------- */
+/* ================= Chart creation (after DOM ready) ================= */
 function createChart(){
-  const container = el('chart');
+  const container = $('chart');
   container.innerHTML = '';
-  chart = LightweightCharts.createChart(container, {
-    layout: { backgroundColor: '#ffffff', textColor: '#111' },
+  const rect = container.getBoundingClientRect();
+  chart = LWC.createChart(container, {
+    width: Math.max(600, Math.floor(rect.width)),
+    height: Math.max(320, Math.floor(rect.height)),
+    layout: { backgroundColor:'#ffffff', textColor: '#111' },
     timeScale: { timeVisible: true, secondsVisible: false },
-    rightPriceScale: { scaleMargins: { top: 0.15, bottom: 0.15 } },
-    leftPriceScale: { visible: false }
+    rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } }
   });
   candleSeries = chart.addCandlestickSeries({
-    upColor: '#0b8a3e',
-    downColor: '#c0392b',
-    wickUpColor: '#0b8a3e',
-    wickDownColor: '#c0392b',
-    borderVisible: true,
-    wickVisible: true
+    upColor: '#0b8a3e', downColor: '#c0392b', wickUpColor: '#0b8a3e', wickDownColor: '#c0392b'
   });
-  // resize on window
+  maSeries = chart.addLineSeries({ color:'#1f78ff', lineWidth:2, priceLineVisible:false });
+  emaSeries = chart.addLineSeries({ color:'#ff7f0e', lineWidth:2, priceLineVisible:false });
+  // handle resize
   window.addEventListener('resize', ()=> {
     if(!chart) return;
-    const rect = container.getBoundingClientRect();
-    chart.applyOptions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+    const r = container.getBoundingClientRect();
+    chart.applyOptions({ width: Math.floor(r.width), height: Math.floor(r.height) });
   });
-}
-createChart();
-
-/* ------------------- Markers (icons) ------------------- */
-function drawMarkers(){
-  // remove existing custom markers drawn with series.setMarkers — just call with [] first
-  if (!candleSeries) return;
-  const m = markers.map(marker => {
-    return {
-      time: Math.floor(new Date(marker.time).getTime()/1000),
-      position: marker.position || 'aboveBar', // 'belowBar'|'aboveBar'|'none'
-      color: marker.color || '#1f78ff',
-      id: marker.id || Math.random().toString(36).slice(2,9),
-      shape: marker.shape || 'arrowUp', // supported shapes: arrowUp, arrowDown, circle, square
-      text: marker.text || ''
-    };
+  // update minmax on time range change
+  chart.timeScale().subscribeVisibleTimeRangeChange(()=>{
+    computeMinMax();
+    updateFloating();
   });
-  candleSeries.setMarkers(m);
+  return chart;
+}
+document.addEventListener('DOMContentLoaded', ()=> {
+  createChart();
+  // initial load using persisted values
+  const sym = persistGet('ict_symbol','XAUUSD');
+  $('symbol').value = sym;
+  $('interval').value = persistGet('ict_interval','5min');
+  $('limit').value = persistGet('ict_limit', DEFAULT_LIMIT);
+  $('headerSymbol').textContent = $('symbol').value;
+  $('headerInterval').textContent = $('interval').value;
+  $('loadBtn').click();
+});
+
+/* ================= Utilities / Data transforms ================= */
+function normalizeToLW(c){
+  // lightweight accepts numeric UNIX seconds or ISO strings. We'll use UNIX seconds.
+  const t = (typeof c.time === 'number') ? c.time : Math.floor(new Date(c.time).getTime()/1000);
+  return { time: t, open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close) };
 }
 
-/* ------------------- Fetch candles ------------------- */
 async function fetchCandles(symbol, interval, limit=200){
   try{
-    setStatus('fetching candles...');
+    $('status').textContent = 'fetching';
     const url = `${BACKEND_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
     const r = await fetch(url);
     if(!r.ok){
-      setStatus(`backend ${r.status}`);
       const txt = await r.text();
-      log('Fetch candles error', r.status, txt);
+      log('fetch error', r.status, txt);
+      $('status').textContent = `backend ${r.status}`;
       return [];
     }
     const j = await r.json();
     return j.candles || [];
   }catch(e){
-    log('fetchCandles error', e.message);
-    setStatus('error fetching');
+    log('fetchCandles', e.message);
+    $('status').textContent = 'fetch failed';
     return [];
   }
 }
 
-/* ------------------- Render candles to chart ------------------- */
+/* ================= Render ================= */
 function renderCandles(candles){
-  if(!chart || !candleSeries) createChart();
-  // transform times to UNIX seconds (lightweight expects number or string with YYYY-MM-DD)
-  const lw = candles.map(c => {
-    const t = (typeof c.time === 'number') ? c.time : new Date(c.time).toISOString();
-    // lightweight accepts ISO string too; use iso for safety
-    return {
-      time: typeof c.time === 'number' ? c.time : Math.floor(new Date(c.time).getTime()/1000),
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close)
-    };
-  });
+  if(!chart) createChart();
+  const lw = candles.map(normalizeToLW);
   candleSeries.setData(lw);
   lastCandles = candles;
-  // compute min/max of visible range
   computeMinMax();
-  // update floating values
   updateFloating();
-  // draw markers
+  computeIndicatorsAndDraw();
   drawMarkers();
-  setStatus('rendered ' + lw.length + ' candles');
+  $('status').textContent = `rendered ${lw.length}`;
 }
 
-/* ------------------- Compute min/max for visible range ------------------- */
+/* ================= Min/Max/floating ================= */
 function computeMinMax(){
   try{
-    if(!chart) return;
-    const visibleRange = chart.timeScale().getVisibleRange();
-    if(!visibleRange) return;
+    const vr = chart.timeScale().getVisibleRange();
+    if(!vr) return;
+    const from = vr.from; const to = vr.to;
     const bars = lastCandles.filter(c => {
-      const ts = Math.floor(new Date(c.time).getTime()/1000);
-      return ts >= visibleRange.from && ts <= visibleRange.to;
+      const t = Math.floor(new Date(c.time).getTime()/1000);
+      return t >= from && t <= to;
     });
-    if(bars.length===0){
-      el('minmax').textContent = '—';
-      return;
-    }
-    const highs = bars.map(b=>Number(b.high));
-    const lows = bars.map(b=>Number(b.low));
-    const mx = Math.max(...highs);
-    const mn = Math.min(...lows);
-    el('minmax').textContent = `${mn.toFixed(4)} / ${mx.toFixed(4)}`;
-    el('floatingMax').textContent = mx.toFixed(4);
-    el('floatingMin').textContent = mn.toFixed(4);
+    if(bars.length===0){ $('minmax').textContent = '—'; return; }
+    const highs = bars.map(b => Number(b.high));
+    const lows = bars.map(b => Number(b.low));
+    const mx = Math.max(...highs); const mn = Math.min(...lows);
+    $('minmax').textContent = `${mn.toFixed(4)} / ${mx.toFixed(4)}`;
+    $('floatingMax').textContent = mx.toFixed(4);
+    $('floatingMin').textContent = mn.toFixed(4);
   }catch(e){ log('computeMinMax', e.message); }
 }
-
-/* ------------------- Floating info (last/min/max) ------------------- */
 function updateFloating(){
-  if(!lastCandles || lastCandles.length===0) return;
+  if(!lastCandles.length) return;
   const last = lastCandles[lastCandles.length-1];
-  el('floatingLast').textContent = Number(last.close).toFixed(4);
-  // min/max already updated by computeMinMax
+  $('floatingLast').textContent = Number(last.close).toFixed(4);
 }
 
-/* ------------------- UI actions ------------------- */
-function setStatus(txt){ el('status').textContent = txt; }
-function updateHeader(){
-  el('headerSymbol').textContent = el('symbol').value;
-  el('headerInterval').textContent = el('interval').value;
-}
-
-el('loadBtn').addEventListener('click', async ()=>{
-  persistSet('ict_symbol', el('symbol').value);
-  persistSet('ict_interval', el('interval').value);
-  persistSet('ict_limit', Number(el('limit').value));
-  updateHeader();
-  const candles = await fetchCandles(el('symbol').value, el('interval').value, Number(el('limit').value || DEFAULT_LIMIT));
-  if(candles.length===0){
-    log('No candles returned');
-    setStatus('no data');
-    return;
+/* ================= Indicators: MA, EMA, FVG ================= */
+function sma(values, period){
+  if(values.length < period) return [];
+  const out = [];
+  let sum = 0;
+  for(let i=0;i<values.length;i++){
+    sum += values[i];
+    if(i >= period) sum -= values[i-period];
+    if(i >= period-1) out.push( Number((sum/period).toFixed(6)) );
   }
+  return out;
+}
+function ema(values, period){
+  const k = 2/(period+1);
+  const out = [];
+  let prev = null;
+  for(let i=0;i<values.length;i++){
+    const v = values[i];
+    if(prev === null){ prev = v; out.push(v); continue; }
+    prev = prev * (1-k) + v * k;
+    out.push(Number(prev.toFixed(6)));
+  }
+  return out;
+}
+function computeIndicatorsAndDraw(){
+  if(!lastCandles || lastCandles.length===0) return;
+  // build closes array
+  const closes = lastCandles.map(c => Number(c.close));
+  // MA(20)
+  if($('maToggle').checked){
+    const maPeriod=20;
+    const mavals = sma(closes, maPeriod);
+    // align times: sma starts at index period-1
+    const points = [];
+    for(let i=maPeriod-1;i<lastCandles.length;i++){
+      const ts = Math.floor(new Date(lastCandles[i].time).getTime()/1000);
+      points.push({ time: ts, value: mavals[i-(maPeriod-1)] });
+    }
+    maSeries.setData(points);
+    maSeries.applyOptions({ visible: true });
+  } else {
+    maSeries.setData([]);
+    maSeries.applyOptions({ visible: false });
+  }
+
+  // EMA(50)
+  if($('emaToggle').checked){
+    const emaPeriod=50;
+    const emavals = ema(closes, emaPeriod);
+    const points = [];
+    for(let i=0;i<emavals.length;i++){
+      const ts = Math.floor(new Date(lastCandles[i].time).getTime()/1000);
+      points.push({ time: ts, value: emavals[i] });
+    }
+    emaSeries.setData(points);
+    emaSeries.applyOptions({ visible: true });
+  } else {
+    emaSeries.setData([]);
+    emaSeries.applyOptions({ visible: false });
+  }
+
+  // Simple FVG: identify gaps between high/low of consecutive candles where difference > threshold
+  // We'll create lightweight "priceLine" rectangles by using price scale marks via series? lightweight-charts doesn't support rectangles directly;
+  // Instead we'll add circle markers with large text as highlight or add a histogram/area series with transparent fill. For simplicity, we'll produce markers showing FVG zones top/bottom.
+  fvgWidgets.forEach(w=> chart.removePriceLine && chart.removePriceLine(w) ); // harmless attempt
+  fvgWidgets = [];
+  if($('fvgToggle').checked){
+    // heuristic: if previous candle high < next candle low -> upward gap (rare), or previous low > next high -> downward gap
+    for(let i=1;i<lastCandles.length;i++){
+      const prev = lastCandles[i-1], cur = lastCandles[i];
+      const prevHigh = Number(prev.high), prevLow = Number(prev.low);
+      const curHigh = Number(cur.high), curLow = Number(cur.low);
+      // gap up
+      if(curLow > prevHigh * 1.0001){
+        // mark as supply gap (bull)
+        markers.push({ id:'fvg'+i, time: cur.time, position:'belowBar', color:'#b7f1d6', shape:'circle', text:'FVG up' });
+      }
+      // gap down
+      if(curHigh < prevLow * 0.9999){
+        markers.push({ id:'fvg'+i, time: cur.time, position:'aboveBar', color:'#ffd9d9', shape:'circle', text:'FVG down' });
+      }
+    }
+    drawMarkers();
+  }
+}
+
+/* ================= Markers ================= */
+function drawMarkers(){
+  if(!candleSeries) return;
+  const m = markers.map(mk=>{
+    const time = (typeof mk.time === 'number') ? mk.time : Math.floor(new Date(mk.time).getTime()/1000);
+    return {
+      time,
+      position: mk.position || 'aboveBar',
+      color: mk.color || '#1f78ff',
+      shape: mk.shape || 'circle',
+      id: mk.id || Math.random().toString(36).slice(2,8),
+      text: mk.text || ''
+    };
+  });
+  candleSeries.setMarkers(m);
+}
+
+/* ================= Fetch + UI bindings ================= */
+$('loadBtn').addEventListener('click', async ()=>{
+  persistSet('ict_symbol', $('symbol').value);
+  persistSet('ict_interval', $('interval').value);
+  persistSet('ict_limit', Number($('limit').value));
+  $('headerSymbol').textContent = $('symbol').value;
+  $('headerInterval').textContent = $('interval').value;
+  const candles = await fetchCandles($('symbol').value, $('interval').value, Number($('limit').value||DEFAULT_LIMIT));
+  if(candles.length===0){ log('no candles'); $('status').textContent = 'no data'; return; }
   renderCandles(candles);
 });
 
-/* ------------------- Auto-refresh ------------------- */
-el('autoBtn').addEventListener('click', ()=>{
+/* auto-refresh */
+$('autoBtn').addEventListener('click', ()=>{
   const current = persistGet('ict_auto','off');
   if(current === 'off'){
-    // ask for seconds
-    const s = prompt('Enter auto-refresh interval (seconds). Example: 15', '15');
-    const secs = Math.max(5, Number(s) || 0);
+    const s = prompt('Auto-refresh seconds (>=5)', '15');
+    const secs = Math.max(5, Number(s)||0);
     persistSet('ict_auto', secs);
-    el('autoIntervalLabel').textContent = `${secs}s`;
     startAuto(secs);
   } else {
-    persistSet('ict_auto','off');
-    el('autoIntervalLabel').textContent = 'off';
     stopAuto();
   }
 });
-
-function startAuto(seconds){
+function startAuto(sec){
   stopAuto();
-  autoTimer = setInterval(async ()=>{
-    el('loadBtn').click();
-  }, seconds*1000);
-  persistSet('ict_auto', seconds);
-  el('autoIntervalLabel').textContent = `${seconds}s`;
-  setStatus('auto on ' + seconds + 's');
+  autoTimer = setInterval(()=> $('loadBtn').click(), sec*1000);
+  persistSet('ict_auto', sec);
+  $('status').textContent = `auto ${sec}s`;
 }
-
-function stopAuto(){
-  if(autoTimer){ clearInterval(autoTimer); autoTimer = null; setStatus('auto stopped'); }
-  persistSet('ict_auto','off');
-}
-
-/* start any persisted auto */
+function stopAuto(){ if(autoTimer) clearInterval(autoTimer); autoTimer=null; persistSet('ict_auto','off'); $('status').textContent='auto off'; }
 const persistedAuto = persistGet('ict_auto','off');
-if(persistedAuto !== 'off'){
-  startAuto(Number(persistedAuto));
-  el('autoIntervalLabel').textContent = `${persistedAuto}s`;
-}
+if(persistedAuto !== 'off') startAuto(Number(persistedAuto));
 
-/* ------------------- TV toggle (TradingView) ------------------- */
-el('tvBtn').addEventListener('click', ()=>{
-  const ov = el('tvOverlay');
-  if(ov.style.display === 'block'){ ov.style.display = 'none'; stopTv(); }
-  else { ov.style.display = 'block'; openTv(); }
+/* TV */
+$('tvBtn').addEventListener('click', ()=>{
+  const ov = $('tvOverlay');
+  if(ov.style.display === 'block'){ ov.style.display='none'; $('tvFrame').src=''; return;}
+  const sym = $('symbol').value || 'XAUUSD';
+  $('tvFrame').src = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`;
+  ov.style.display = 'block';
+});
+$('closeTv').addEventListener('click', ()=>{ $('tvOverlay').style.display='none'; $('tvFrame').src=''; });
+
+/* fullscreen */
+$('fullscreenBtn').addEventListener('click', ()=>{
+  const card = $('chartCard');
+  if(!card.classList.contains('fs')){ card.classList.add('fs'); card.style.position='fixed'; card.style.left='0';card.style.top='0';card.style.width='100%';card.style.height='100%';card.style.zIndex=9999; chart && chart.applyOptions({ width: card.clientWidth, height: card.clientHeight }); }
+  else { card.classList.remove('fs'); card.style.position=''; card.style.left='';card.style.top='';card.style.width='';card.style.height='';card.style.zIndex=''; chart && chart.applyOptions({ width: $('chart').clientWidth, height: $('chart').clientHeight }); }
 });
 
-el('closeTv').addEventListener('click', ()=>{ el('tvOverlay').style.display='none'; });
-
-function openTv(){
-  const iframe = el('tvFrame');
-  const sym = el('symbol').value || 'XAUUSD';
-  // open TradingView chart embed (public widget) with symbol search
-  // Note: For official widget with symbol mapping you may need to add proper symbol provider; here we open TradingView's chart with query string.
-  iframe.src = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`;
-  el('tvOverlay').style.display = 'block';
-}
-function stopTv(){ el('tvFrame').src=''; el('tvOverlay').style.display='none'; }
-
-/* ------------------- Fullscreen ------------------- */
-el('fullscreenBtn').addEventListener('click', ()=>{
-  const cc = el('chartCard');
-  if(!cc.classList.contains('fullscreen')){
-    cc.classList.add('fullscreen');
-    // force chart resize after a tick
-    setTimeout(()=> chart && chart.applyOptions({ width: cc.clientWidth, height: cc.clientHeight }), 200);
-  } else {
-    cc.classList.remove('fullscreen');
-    setTimeout(()=> chart && chart.applyOptions({ width: el('chart').clientWidth, height: el('chart').clientHeight }), 200);
-  }
-});
-
-/* ------------------- Markers: add by user click ------------------- */
-el('addMarkerBtn').addEventListener('click', ()=>{
-  if(!lastCandles || lastCandles.length===0){ alert('No candles loaded'); return; }
+/* add marker */
+$('addMarkerBtn').addEventListener('click', ()=>{
+  if(!lastCandles.length) return alert('No candles');
   const last = lastCandles[lastCandles.length-1];
-  const marker = {
-    id: Math.random().toString(36).slice(2,9),
-    time: last.time,
-    position: 'aboveBar',
-    color: '#ff8a00',
-    shape: 'arrowUp',
-    text: 'ICT'
-  };
-  markers.push(marker);
+  markers.push({ id:Math.random().toString(36).slice(2,8), time:last.time, position:'aboveBar', color:'#ff8a00', shape:'arrowUp', text:'ICT' });
   drawMarkers();
-  setStatus('marker added');
 });
 
-/* ------------------- Export CSV ------------------- */
-el('exportBtn').addEventListener('click', ()=>{
-  if(!lastCandles || lastCandles.length===0) { alert('No data'); return; }
+/* export csv */
+$('exportBtn').addEventListener('click', ()=>{
+  if(!lastCandles.length) return alert('no data');
   const rows = [['time','open','high','low','close','volume']];
-  for(const c of lastCandles) rows.push([c.time, c.open, c.high, c.low, c.close, c.volume||0]);
-  const csv = rows.map(r => r.map(v => typeof v === 'string' ? `"${v.replace(/"/g,'""')}"` : v).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
+  for(const c of lastCandles) rows.push([c.time,c.open,c.high,c.low,c.close,c.volume||0]);
+  const csv = rows.map(r=>r.map(v=>typeof v==='string'?`"${v.replace(/"/g,'""')}"`:v).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `${el('symbol').value || 'data'}.csv`; a.click();
+  const a = document.createElement('a'); a.href=url; a.download = `${$('symbol').value||'data'}.csv`; a.click();
   URL.revokeObjectURL(url);
 });
 
-/* ------------------- Signals & Tray ------------------- */
+/* signals demo */
 function renderSignalsList(){
-  const listEl = el('signalsList');
-  listEl.innerHTML = '';
   const store = persistGet('ict_signals', []);
-  if(store.length === 0){ listEl.innerHTML = '<div class="mutedSmall">No signals</div>'; return; }
-  for(const s of store){
-    const d = document.createElement('div'); d.className='signal';
-    d.innerHTML = `<div class="icon">${s.type==='buy'?'⇧':'⇩'}</div>
-                   <div style="flex:1">
-                      <div style="font-weight:600">${s.title}</div>
-                      <div class="muted">${s.text}</div>
-                   </div>
-                   <div style="text-align:right"><div class="mutedSmall">${new Date(s.time).toLocaleString()}</div></div>`;
-    listEl.appendChild(d);
-  }
+  const el = $('signalsList'); el.innerHTML='';
+  if(!store.length) { el.innerHTML = '<div class="muted">No signals</div>'; return; }
+  store.forEach(s=>{
+    const d = document.createElement('div'); d.style.marginBottom='6px';
+    d.innerHTML = `<div style="display:flex;justify-content:space-between"><div><strong>${s.title}</strong><div class="muted">${s.text}</div></div><div><small>${new Date(s.time).toLocaleString()}</small></div></div>`;
+    el.appendChild(d);
+  });
 }
-
-el('genSignal').addEventListener('click', ()=>{
-  const arr = persistGet('ict_signals', []);
-  const s = { id: Math.random().toString(36).slice(2,8), type: Math.random()>0.5?'buy':'sell', title: 'Demo signal', text: 'Demo ICT signal', time: new Date().toISOString() };
-  arr.unshift(s);
-  persistSet('ict_signals', arr);
+$('genSignal').addEventListener('click', ()=>{
+  const data = persistGet('ict_signals', []);
+  const s = { id:Math.random().toString(36).slice(2,8), type:Math.random()>0.5?'buy':'sell', title:'Demo', text:'Demo signal', time:new Date().toISOString()};
+  data.unshift(s);
+  persistSet('ict_signals', data);
   renderSignalsList();
-  // also add a marker on chart:
-  markers.push({ time: lastCandles.length?lastCandles[lastCandles.length-1].time:new Date().toISOString(), position: s.type==='buy'?'belowBar':'aboveBar', shape: s.type==='buy'?'arrowUp':'arrowDown', color: s.type==='buy'?'#0b8a3e':'#c0392b', text: s.type.toUpperCase() });
+  // push marker
+  if(lastCandles.length) markers.push({ id:'sig'+s.id, time:lastCandles[lastCandles.length-1].time, position:s.type==='buy'?'belowBar':'aboveBar', color: s.type==='buy'?'#0b8a3e':'#c0392b', shape: s.type==='buy'?'arrowUp':'arrowDown', text:s.type.toUpperCase()});
   drawMarkers();
 });
+$('clearSignals').addEventListener('click', ()=>{ persistSet('ict_signals', []); renderSignalsList(); markers=[]; drawMarkers(); });
+$('refreshSignals').addEventListener('click', ()=>{ renderSignalsList(); });
 
-el('clearSignals').addEventListener('click', ()=>{
-  if(!confirm('Clear all saved signals?')) return;
-  persistSet('ict_signals', []);
-  renderSignalsList();
-  markers = [];
-  drawMarkers();
-});
-
-/* tray */
-el('trayToggle').addEventListener('click', ()=>{
-  const t = el('tray');
-  if(t.classList.contains('hidden')){ t.classList.remove('hidden'); el('trayBody').innerHTML = renderTray(); } else { t.classList.add('hidden'); }
-});
-el('trayClose').addEventListener('click', ()=> el('tray').classList.add('hidden'));
-
-function renderTray(){
-  const store = persistGet('ict_signals', []);
-  if(store.length===0) return '<div class="mutedSmall">No signals in tray</div>';
-  return store.map(s => `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-    <div style="width:40px;height:40px;border-radius:6px;background:${s.type==='buy'?'#dff6ea':'#ffecec'};display:flex;align-items:center;justify-content:center;font-weight:700">${s.type==='buy'?'⇧':'⇩'}</div>
-    <div style="flex:1">
-      <div style="font-weight:600">${s.title}</div>
-      <div class="mutedSmall">${s.text}</div>
-    </div>
-    <div style="text-align:right"><button class="miniBtn" onclick="zoomToSignal('${s.id}')">Zoom</button></div>
-  </div>`).join('\n');
-}
-
-/* zoom-to-signal helper */
-window.zoomToSignal = function(sigId){
-  const store = persistGet('ict_signals', []);
-  const s = store.find(x => x.id === sigId);
-  if(!s){ alert('signal not found'); return; }
-  const ts = Math.floor(new Date(s.time).getTime()/1000);
-  chart.timeScale().setVisibleRange({ from: ts-30, to: ts+10 });
-  el('tray').classList.add('hidden');
-};
-
-/* render signals area initially */
 renderSignalsList();
 
-/* ------------------- Compute min/max after pan/zoom ------------------- */
-chart.timeScale().subscribeVisibleTimeRangeChange(()=> {
-  computeMinMax();
-  updateFloating();
+/* tray */
+$('trayToggle').addEventListener('click', ()=> {
+  const t = $('tray'); if(t.classList.contains('open')) t.classList.remove('open'); else { t.classList.add('open'); $('trayBody').innerHTML = JSON.stringify(persistGet('ict_signals',[]), null, 2); }
 });
 
-/* ------------------- Health check (backend) ------------------- */
+/* indicator toggles recompute */
+$('maToggle').addEventListener('change', computeIndicatorsAndDraw);
+$('emaToggle').addEventListener('change', computeIndicatorsAndDraw);
+$('fvgToggle').addEventListener('change', computeIndicatorsAndDraw);
+
+/* ================= Health check ================= */
 async function healthCheck(){
   try{
     const r = await fetch(`${BACKEND_BASE}/ict/health`);
-    if(r.ok){
-      const j = await r.json();
-      log('backend healthy', j);
-      setStatus('backend OK');
-    } else {
-      setStatus('backend error ' + r.status);
-      log('health error', r.status);
-    }
-  }catch(e){
-    setStatus('backend unreachable');
-    log('health exception', e.message);
-  }
+    if(r.ok){ $('status').textContent = 'backend OK'; log('health OK'); } else { $('status').textContent = 'health err '+r.status; log('health err', r.status); }
+  }catch(e){ $('status').textContent = 'backend unreachable'; log('health err', e.message); }
 }
 setInterval(healthCheck, 30_000);
 healthCheck();
 
-/* ------------------- Initial load (auto): load persisted config and auto-fetch once ------------------- */
-(async function initialLoad(){
-  const sym = persistGet('ict_symbol','XAUUSD');
-  const inter = persistGet('ict_interval','1min');
-  el('symbol').value = sym;
-  el('interval').value = inter;
-  el('limit').value = persistGet('ict_limit', DEFAULT_LIMIT);
-  updateHeader();
-  // load once
-  el('loadBtn').click();
+/* ================= MAIN: load button fetches then render ================= */
+async function mainLoad(){
+  const symbol = $('symbol').value || 'XAUUSD';
+  const interval = $('interval').value || '5min';
+  const limit = Number($('limit').value || DEFAULT_LIMIT);
+  $('status').textContent = 'loading';
+  try{
+    const candles = await fetchCandles(symbol, interval, limit);
+    if(!candles || candles.length===0){ $('status').textContent='no data'; log('no candles'); return; }
+    renderCandles(candles);
+  }catch(e){ log('mainLoad', e.message); $('status').textContent='error'; }
+}
+$('loadBtn').addEventListener('click', mainLoad);
+
+/* attempt to auto-run if persisted */
+(function initAuto(){
+  const a = persistGet('ict_auto','off');
+  if(a !== 'off'){ startAuto(Number(a)); }
 })();
 
-/* ------------------- Keyboard shortcuts ------------------- */
-window.addEventListener('keydown', (e)=>{
-  if(e.key === 'f' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); el('fullscreenBtn').click(); }
-  if(e.key === 'r' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); el('loadBtn').click(); }
+/* ================= Defensive: log uncaught errors to UI ================= */
+window.addEventListener('error', (ev)=> {
+  log('UNCAUGHT ERROR', ev.message, ev.filename, ev.lineno);
 });
 
-/* ------------------- Resize chart on mount ------------------- */
-setTimeout(()=> chart && chart.applyOptions({ width: el('chart').clientWidth, height: el('chart').clientHeight }), 300);
+/* ================= compute indicators on any load/render ================= */
+/* computeIndicatorsAndDraw called in renderCandles */
 
+/* ================= END ================= */
 </script>
+
 </body>
 </html>

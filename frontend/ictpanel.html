@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Astro ICT Chart Panel</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- interact.js for drag & resize -->
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Astro ICT Chart Panel</h1>
+    <div class="controls">
+      <input id="symbol" value="XAUUSD" />
+      <select id="interval">
+        <option value="1min">1m</option>
+        <option value="5min">5m</option>
+        <option value="15min">15m</option>
+        <option value="1h">1h</option>
+      </select>
+      <button id="loadBtn">Load</button>
+      <button id="tvBtn" title="Open TradingView widget">TV</button>
+      <button id="fullscreenBtn">Fullscreen</button>
+      <label><input id="themeToggle" type="checkbox"> Dark</label>
+    </div>
+  </header>
+
+  <main>
+    <div id="chartPanel" class="panel" data-resizable>
+      <div id="chart" class="chart"></div>
+      <div id="chart-stats" class="chart-stats">
+        Min: <span id="minVal">-</span> | Max: <span id="maxVal">-</span> | Close: <span id="closeVal">-</span>
+      </div>
+    </div>
+
+    <aside id="rightPanel" class="panel right" data-resizable>
+      <h2>AI Mentor</h2>
+      <div id="aiMentor">
+        <button id="refreshMentor">Refresh Mentor</button>
+        <p id="mentorText">AI mentor demo text</p>
+      </div>
+
+      <h2>Signals</h2>
+      <div id="signalsTray" class="signals-tray">
+        <button id="toggleSignals">Show / Hide</button>
+        <div id="signalsList" class="signals-list"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <div id="statusBox">Status: <span id="statusText">idle</span></div>
+  </footer>
+
+  <!-- TV widget container -->
+  <div id="tvWidget" class="tv-widget hidden">
+    <div id="tvClose">✖</div>
+    <div id="tradingview_container" style="width:100%;height:100%;"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

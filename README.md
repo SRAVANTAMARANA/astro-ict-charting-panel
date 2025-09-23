@@ -1,7 +1,15 @@
-# Astro ICT Panel - Clean starter
+# Astro ICT Charting Panel - Full one-push package
 
-## Quick start
-1. Edit backend/server.py and place your real TwelveData key in TWELVEDATA_KEY
-2. docker-compose up --build
-3. Frontend: http://localhost:3000
-4. Backend docs: http://localhost:8000/docs
+This repo contains a FastAPI backend and a static frontend (Lightweight Charts + TradingView widget toggle).  
+Services run with Docker Compose.
+
+## Run
+1. Build and start:
+   docker-compose up --build -d
+
+2. Frontend: http://localhost:3000/  
+   Backend: http://localhost:8000/  
+   WebSocket: ws://localhost:8000/ws/signals
+
+## Backend protected endpoint
+/ict/signals/add is protected by API_TOKEN (set in backend/.env or compose environment).

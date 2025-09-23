@@ -5,362 +5,419 @@
   <title>Astro ICT Chart Panel</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    html,body { height:100%; margin:0; font-family:Arial,Helvetica,sans-serif; background:#f6f9fc; }
-    header { background:#072b55; color:#fff; padding:14px; display:flex; align-items:center; gap:12px;}
-    header h1 { font-size:18px; margin:0; }
-    #controls { margin-left:auto; display:flex; gap:8px; align-items:center; }
-    .btn { padding:6px 10px; border-radius:4px; border:0; cursor:pointer; background:#0b69ff; color:#fff; }
-    .btn.secondary { background:#ffffff; color:#0b69ff; border:1px solid #0b69ff; }
-    #layout { display:flex; height:calc(100% - 60px); gap:10px; padding:10px; box-sizing:border-box; }
-    #left { flex:1 1 70%; min-width:300px; display:flex; flex-direction:column; gap:8px; }
-    #chart-wrap { position:relative; flex:1; background:#fff; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.08); overflow:hidden; }
-    #chart { width:100%; height:100%; }
-    #chart-toolbar { display:flex; gap:8px; padding:8px; align-items:center; border-bottom:1px solid #eee; background:linear-gradient(180deg,#fff, #fbfdff); }
-    input[type="text"], select { padding:6px 8px; border-radius:4px; border:1px solid #ddd; }
-    #right { width:320px; min-width:220px; display:flex; flex-direction:column; gap:8px; }
-    .panel { background:#fff; padding:10px; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-    .panel h3 { margin:0 0 8px 0; font-size:14px; color:#073659; display:flex; align-items:center; justify-content:space-between; }
-    .signals-body { max-height:360px; overflow:auto; padding-top:6px; }
-    .signal { padding:8px; border-radius:6px; margin-bottom:8px; background:#f1f8ff; border-left:4px solid #0b69ff; }
-    .metrics { display:flex; gap:12px; margin-left:8px; color:#073659; }
-    .metric { font-size:13px; }
-    .draggable { cursor:move; user-select:none; }
-    #tvContainer { width:100%; height:520px; display:none; background:#fff; border-radius:6px; overflow:hidden; }
-    #fullscreenBtn { position:absolute; right:8px; top:8px; z-index:10; }
-    #status { padding:6px 10px; color:#666; font-size:13px; }
-    /* small responsive */
-    @media (max-width:900px){
-      #layout { flex-direction:column; }
-      #right { width:100%; }
+    :root{
+      --bg:#0b2b4a; --panel:#fff; --muted:#666; --accent:#007bff;
     }
+    body{margin:0;font-family:Inter,Roboto,Arial,sans-serif;background:#0f2a44;color:#111;}
+    .app { display:flex; height:100vh; gap:12px; padding:12px; box-sizing:border-box; }
+    .left { flex:1; display:flex; flex-direction:column; gap:12px; }
+    .right { width:360px; display:flex; flex-direction:column; gap:12px; }
+    .panel { background:var(--panel); border-radius:8px; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,0.12); }
+    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .controls input, .controls select, .controls button { padding:8px 10px; font-size:14px; border-radius:6px; border:1px solid #ddd; }
+    #chart { height:560px; width:100%; }
+    .small { font-size:13px; color:var(--muted); }
+    .signals { max-height:360px; overflow:auto; }
+    .toolbar { display:flex; gap:8px; align-items:center; }
+    .statusbar { position:fixed; left:12px; bottom:12px; background:#fff;padding:8px 10px;border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,0.15); }
+    .hidden { display:none !important; }
+    .tv-wrap { position:relative; height:0; overflow:hidden; transition:height .25s ease; }
+    .tv-wrap.open { height:600px; }
+    .signals-tray { position:relative; }
+    .btn { background:var(--accent); color:#fff; border:none; cursor:pointer; border-radius:6px; padding:8px 10px; }
+    .btn.secondary { background:#eee; color:#111; }
+    .flex { display:flex; gap:8px; }
+    .grow { flex:1; }
+    .mini { padding:6px 8px; font-size:13px; }
+    .muted { color:var(--muted); }
+    pre { max-height:260px; overflow:auto; background:#f7f7f7; padding:10px; border-radius:6px; }
+    .topline { display:flex; justify-content:space-between; align-items:center; gap:8px; }
   </style>
+
   <!-- Lightweight Charts -->
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- TradingView widget library (will be loaded on demand when user opens TV) -->
 </head>
 <body>
-  <header>
-    <h1>Astro ICT Chart Panel</h1>
-    <div id="controls">
-      <label>Symbol <input id="symbol" type="text" value="XAUUSD" /></label>
-      <label>TV Interval
-        <select id="interval">
-          <option value="1min">1m</option>
-          <option value="5min" selected>5m</option>
-          <option value="15min">15m</option>
-          <option value="1h">1h</option>
-        </select>
-      </label>
-      <button id="loadBtn" class="btn">Load</button>
-      <button id="toggleTV" class="btn secondary">TV</button>
-      <button id="fullscreen" class="btn secondary" title="Fullscreen">Fullscreen</button>
+  <div class="app">
+    <div class="left">
+      <div class="panel topline">
+        <div>
+          <h2 style="margin:0">Astro ICT Chart Panel</h2>
+          <div class="small">Local testing UI — connect backend on <code>http://localhost:8000</code></div>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn mini" id="fullscreenBtn">Fullscreen</button>
+          <button class="btn mini secondary" id="toggleTheme">Theme</button>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="panel controls">
+        <label><input id="symbol" value="XAUUSD" /></label>
+        <label>
+          <select id="interval">
+            <option value="1min">1m</option>
+            <option value="5min" selected>5m</option>
+            <option value="15min">15m</option>
+            <option value="30min">30m</option>
+            <option value="1h">1h</option>
+            <option value="1d">1d</option>
+          </select>
+        </label>
+        <label><input id="limit" type="number" value="150" style="width:90px" /></label>
+
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button id="loadBtn" class="btn">Load</button>
+          <button id="tvBtn" class="btn secondary">TV</button>
+          <button id="refreshHealth" class="btn secondary mini">Health</button>
+        </div>
+      </div>
+
+      <!-- Chart container -->
+      <div class="panel" id="chartPanel">
+        <div id="chart" aria-label="chart area"></div>
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          <button class="btn secondary" id="btnZoomIn">Zoom In</button>
+          <button class="btn secondary" id="btnZoomOut">Zoom Out</button>
+          <button class="btn secondary" id="btnSavePNG">Export PNG</button>
+          <div style="margin-left:auto" class="small">Status: <span id="status">idle</span></div>
+        </div>
+      </div>
+
+      <!-- TV widget container (hidden until toggled) -->
+      <div class="panel tv-wrap" id="tvWrap">
+        <div id="tvContainer" style="height:100%;"></div>
+      </div>
     </div>
-  </header>
 
-  <div id="layout">
-    <div id="left">
-      <div id="chart-wrap" class="panel">
-        <div id="chart-toolbar">
-          <div><strong id="titleSymbol">XAUUSD</strong></div>
-          <div class="metrics" style="margin-left:16px;">
-            <div class="metric">Max: <span id="maxVal">-</span></div>
-            <div class="metric">Min: <span id="minVal">-</span></div>
-            <div class="metric">Close: <span id="closeVal">-</span></div>
-          </div>
-          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-            <label style="font-size:13px;color:#555">Lightweight</label>
-          </div>
-        </div>
-
-        <div id="chart" ></div>
-        <button id="fullscreenBtn" class="btn secondary" style="display:none">Exit Fullscreen</button>
-        <div id="tvContainer"></div>
-      </div>
-
-      <div id="status" class="panel">Status: <span id="statusText">idle</span></div>
-    </div>
-
-    <div id="right">
+    <div class="right">
       <div class="panel">
-        <h3>AI Mentor <button id="refreshMentor" class="btn secondary">Refresh</button></h3>
-        <div id="mentorText">AI mentor demo text. (Integrate your AI model / TTS later.)</div>
+        <h3 style="margin:0 0 8px 0">AI Mentor</h3>
+        <div class="small">AI Mentor demo — lightweight control panel</div>
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          <button id="refreshMentor" class="btn">Refresh Mentor</button>
+          <button id="speakMentor" class="btn secondary">Speak</button>
+        </div>
+        <pre id="mentorText">AI mentor demo text</pre>
       </div>
 
-      <div class="panel" id="signalsPanel">
-        <h3 class="draggable">Signals <button id="showHideSignals" class="btn secondary" style="font-size:12px;">Hide</button></h3>
-        <div class="signals-body" id="signalsBody">
-          <div class="signal">No signals loaded yet</div>
+      <div class="panel signals-tray">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Signals</h3>
+          <div>
+            <button id="showHideSignals" class="btn mini secondary">Show/Hide</button>
+            <button id="refreshSignals" class="btn mini">Refresh</button>
+          </div>
         </div>
+        <div id="signals" class="signals muted">No signals yet</div>
       </div>
 
       <div class="panel">
-        <h3>Quick Tools</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button id="btnMaxMin" class="btn secondary">Show Max/Min</button>
-          <button id="btnExportCSV" class="btn secondary">Export CSV</button>
-          <button id="btnToggleTheme" class="btn secondary">Dark</button>
+        <h4 style="margin:0">Health & Debug</h4>
+        <div style="margin-top:6px;">
+          <button id="healthCheck" class="btn mini">Check Health</button>
+          <button id="connectWS" class="btn mini secondary">Connect WS</button>
         </div>
+        <pre id="debugConsole" style="margin-top:8px;">Console output...</pre>
       </div>
     </div>
   </div>
 
-  <script>
-  (function(){
-    // ----- CONFIG -----
-    const BACKEND_BASE = 'http://localhost:8000'; // change if backend different host/port
-    const chartContainer = document.getElementById('chart');
-    const tvContainer = document.getElementById('tvContainer');
-    const statusText = document.getElementById('statusText');
-    const symbolInput = document.getElementById('symbol');
-    const intervalSelect = document.getElementById('interval');
-    const loadBtn = document.getElementById('loadBtn');
-    const toggleTVBtn = document.getElementById('toggleTV');
-    const showHideSignalsBtn = document.getElementById('showHideSignals');
-    const signalsBody = document.getElementById('signalsBody');
-    const titleSymbol = document.getElementById('titleSymbol');
-    const maxEl = document.getElementById('maxVal'), minEl = document.getElementById('minVal'), closeEl = document.getElementById('closeVal');
-    const fullscreenBtn = document.getElementById('fullscreen');
-    const fullscreenExitBtn = document.getElementById('fullscreenBtn');
+  <div class="statusbar panel" id="floatingStatus" role="status">
+    <strong id="floatText">Status: idle</strong>
+    <span id="latency" style="margin-left:10px;color:#555;font-size:13px"></span>
+  </div>
 
-    // ----- Lightweight chart setup -----
-    let chart = null, candleSeries = null;
-    let lastCandles = [];
+<script>
+/* =========================
+   Configuration
+   ========================= */
+const API_BASE = "http://localhost:8000"; // backend base
+const WS_BASE  = "ws://localhost:8000/ws"; // backend websocket (optional)
 
-    function initChart() {
-      if (chart) { chart.remove(); chart = null; candleSeries = null; }
-      // create chart
-      chart = LightweightCharts.createChart(chartContainer, {
-        layout: { backgroundColor: '#ffffff', textColor: '#191919' },
-        width: chartContainer.clientWidth, height: chartContainer.clientHeight,
-        rightPriceScale: { visible: true },
-        timeScale: { timeVisible: true, secondsVisible: false }
-      });
-      candleSeries = chart.addCandlestickSeries();
-      window.addEventListener('resize', () => chart.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight }));
+/* =========================
+   Helpers & DOM refs
+   ========================= */
+const el = id => document.getElementById(id);
+const status = (s) => { el('status').innerText = s; el('floatText').innerText = "Status: " + s; }
+const debug = (s) => { const d = el('debugConsole'); d.innerText = (new Date()).toISOString() + " - " + s + "\n" + d.innerText; }
+
+/* =========================
+   Chart initialization
+   ========================= */
+let chart = null;
+let candleSeries = null;
+let currentTheme = 'light';
+
+function initChart() {
+  if(chart) return;
+  const container = el('chart');
+  chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 560,
+    layout: {
+      backgroundColor: currentTheme === 'dark' ? '#0b2b4a' : '#ffffff',
+      textColor: currentTheme === 'dark' ? '#d9e6ff' : '#333',
+    },
+    grid: {
+      vertLines: { color: currentTheme === 'dark' ? '#1f395a' : '#eee' },
+      horzLines: { color: currentTheme === 'dark' ? '#1f395a' : '#eee' },
+    },
+    localization: { timeFormatter: (businessDayOrTimestamp) => {
+      const d = new Date(businessDayOrTimestamp * 1000);
+      return d.toISOString().replace('T',' ').substr(0,19);
+    } }
+  });
+  candleSeries = chart.addCandlestickSeries();
+  window.addEventListener('resize', () => {
+    chart.applyOptions({ width: container.clientWidth });
+  });
+}
+
+/* =========================
+   Fetching candles
+   ========================= */
+async function loadCandles(symbol, interval, limit=200) {
+  status("loading candles...");
+  debug(`loadCandles(${symbol}, ${interval}, ${limit})`);
+  try {
+    const url = `${API_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${encodeURIComponent(limit)}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error("HTTP " + r.status + " - " + txt);
     }
-
-    // draw candle array format: [{time: '2025-09-23T12:00:00Z', open:.., high:.., low:.., close:..}, ...]
-    function plotCandles(candles) {
-      if (!chart) initChart();
-      const data = candles.map(c => {
-        // Lightweight-charts expects 'time' as ISO without Z for minute-based, or epoch; library accepts ISO RFC3339 as string in many builds
-        return {
-          time: (new Date(c.time)).toISOString(),
-          open: Number(c.open),
-          high: Number(c.high),
-          low: Number(c.low),
-          close: Number(c.close)
-        };
-      });
-      candleSeries.setData(data);
-      lastCandles = data;
-      updateMetrics(data);
-      statusText.innerText = `Loaded ${data.length} candles`;
+    const data = await r.json();
+    if(!data || !Array.isArray(data.candles)) {
+      debug("Malformed candles response: " + JSON.stringify(data).slice(0,200));
+      status("no candle data");
+      return [];
     }
+    const arr = data.candles.map(c => {
+      // support either timestamp or ISO time
+      const t = (typeof c.time === 'number') ? c.time : (new Date(c.time)).getTime() / 1000;
+      return { time: Math.floor(t), open: +c.open, high: +c.high, low: +c.low, close: +c.close };
+    });
+    status("candles loaded");
+    debug(`loaded ${arr.length} candles`);
+    return arr;
+  } catch (err) {
+    console.error(err);
+    debug("loadCandles error: " + err.message);
+    status("candles failed");
+    return [];
+  }
+}
 
-    function updateMetrics(data){
-      if (!data || data.length===0) {
-        maxEl.innerText = minEl.innerText = closeEl.innerText = '-';
-        return;
-      }
-      let max = -Infinity, min = Infinity;
-      data.forEach(d => { if (d.high>max) max=d.high; if (d.low<min) min=d.low; });
-      maxEl.innerText = round(max); minEl.innerText = round(min);
-      closeEl.innerText = round(data[data.length-1].close);
+/* =========================
+   Render candles to chart
+   ========================= */
+async function render(symbol, interval, limit) {
+  initChart();
+  const data = await loadCandles(symbol, interval, limit);
+  if(data.length === 0) {
+    el('mentorText').innerText = "No candles returned.";
+    return;
+  }
+  candleSeries.setData(data);
+  status(`rendered ${data.length} candles`);
+}
+
+/* =========================
+   Signals & Mentor
+   ========================= */
+async function fetchSignals() {
+  try {
+    const r = await fetch(`${API_BASE}/ict/signals`);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const list = j.signals || [];
+    const container = el('signals');
+    if (list.length === 0) container.innerText = "No signals";
+    else {
+      container.innerHTML = list.map(s => `<div><strong>${s.type}</strong> ${s.desc || ''} <small class="muted">${s.time || ''}</small></div>`).join('');
     }
-    function round(n){ return (Math.round(n*1000)/1000).toString(); }
+    debug("signals refreshed");
+  } catch (err) {
+    debug("fetchSignals error: " + err.message);
+    el('signals').innerText = "Signals error";
+  }
+}
 
-    // ----- Fetch candles from backend -----
-    async function fetchCandles(symbol, interval, limit=200){
-      const url = `${BACKEND_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
-      statusText.innerText = 'fetching candles...';
+async function refreshMentor(){
+  // demo placeholder - fetch from backend AI endpoint if exists
+  try {
+    const r = await fetch(`${API_BASE}/ict/mentor`); // optional
+    if (r.ok) {
+      const j = await r.json();
+      el('mentorText').innerText = j.text || "AI mentor response";
+    } else {
+      el('mentorText').innerText = "AI mentor offline (demo)";
+    }
+  } catch(e){
+    el('mentorText').innerText = "AI mentor demo text (no backend).";
+  }
+}
+
+/* =========================
+   Health & WebSocket
+   ========================= */
+async function checkHealth(){
+  try {
+    const r = await fetch(`${API_BASE}/ict/health`);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    status("backend: " + (j.status||"ok"));
+    el('latency').innerText = ` ${j.time || ''}`;
+    debug("Health OK");
+  } catch (err) {
+    status("backend down");
+    debug("Health error: " + err.message);
+  }
+}
+
+let ws = null;
+function connectWS(){
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    debug("WS already open");
+    return;
+  }
+  try {
+    ws = new WebSocket(WS_BASE);
+    ws.addEventListener('open', () => {
+      debug("WS open");
+      status("ws open");
+    });
+    ws.addEventListener('message', (ev) => {
+      debug("WS msg: " + ev.data);
+      // attempt parse JSON and update chart/signals as needed
       try {
-        const res = await fetch(url, { method:'GET' });
-        if (!res.ok) {
-          const txt = await res.text();
-          console.error('Backend returned error', res.status, txt);
-          statusText.innerText = `backend error ${res.status}`;
-          return null;
+        const obj = JSON.parse(ev.data);
+        if (obj.type === 'candles_update' && obj.candles) {
+          const arr = obj.candles.map(c => ({ time: Math.floor(new Date(c.time).getTime()/1000), open:+c.open, high:+c.high, low:+c.low, close:+c.close }));
+          candleSeries.update(arr[arr.length-1]);
+          debug("WS updated series");
+        } else if (obj.type === 'signal') {
+          fetchSignals(); // refresh
         }
-        const json = await res.json();
-        console.log('candles response', json);
-        if (json && json.candles) return json.candles;
-        // handle some backends returning 'data' or [] 
-        if (json && Array.isArray(json)) return json;
-        return null;
-      } catch (err) {
-        console.error('fetchCandles error', err);
-        statusText.innerText = 'fetch error';
-        return null;
-      }
-    }
-
-    // ----- TradingView widget toggle -----
-    let tvLoaded = false;
-    function showTradingView(symbol){
-      // hide lightweight chart & show TV container
-      chartContainer.style.display = 'none';
-      tvContainer.style.display = 'block';
-      toggleTVBtn.innerText = 'LW Chart';
-      if (!tvLoaded) {
-        // TradingView official widget embed
-        const script = document.createElement('script');
-        script.src = "https://s3.tradingview.com/tv.js";
-        script.onload = () => {
-          new TradingView.widget({
-            "width": "100%",
-            "height": "100%",
-            "symbol": symbol || "OANDA:XAUUSD",
-            "interval": intervalSelect.value.replace('min',''),
-            "timezone": "Etc/UTC",
-            "theme": "light",
-            "style": "1",
-            "locale": "en",
-            "toolbar_bg": "#f1f3f6",
-            "enable_publishing": false,
-            "allow_symbol_change": true,
-            "container_id": "tvContainer"
-          });
-        };
-        document.body.appendChild(script);
-        tvLoaded = true;
-      }
-    }
-
-    function showLightweight(){
-      chartContainer.style.display = 'block';
-      tvContainer.style.display = 'none';
-      toggleTVBtn.innerText = 'TV';
-    }
-
-    // ----- Signals / Mentor (demo) -----
-    function updateSignals(list){
-      signalsBody.innerHTML = '';
-      if (!list || list.length===0) {
-        signalsBody.innerHTML = '<div class="signal">No signals</div>';
-        return;
-      }
-      list.forEach(s => {
-        const el = document.createElement('div');
-        el.className = 'signal';
-        el.innerHTML = `<div><strong>${s.type||'SIGNAL'}</strong> ${s.desc||''}</div><div style="font-size:12px;color:#444;margin-top:6px">${s.time||''}</div>`;
-        signalsBody.appendChild(el);
-      });
-    }
-
-    // Demo: load sample signals (replace by real backend call)
-    function loadSignalsDemo(){
-      const demo = [
-        { type:'BUY', desc:'Demo buy at 3742.5', time: new Date().toISOString() },
-        { type:'SELL', desc:'Demo sell at 3730.0', time: new Date().toISOString() }
-      ];
-      updateSignals(demo);
-    }
-
-    // ----- CSV export -----
-    function exportCSV(){
-      if (!lastCandles || lastCandles.length===0) { alert('No candles to export'); return; }
-      const rows = [['time','open','high','low','close']];
-      lastCandles.forEach(d => rows.push([d.time, d.open, d.high, d.low, d.close]));
-      const csv = rows.map(r => r.join(',')).join('\n');
-      const blob = new Blob([csv], {type:'text/csv'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${symbolInput.value||'symbol'}_${intervalSelect.value}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    // ----- Fullscreen handling -----
-    function goFullscreen(){
-      const el = document.getElementById('chart-wrap');
-      if (el.requestFullscreen) el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      fullscreenExitBtn.style.display = 'block';
-    }
-    function exitFullscreen(){
-      if (document.exitFullscreen) document.exitFullscreen();
-      fullscreenExitBtn.style.display = 'none';
-    }
-    fullscreenBtn.addEventListener('click', goFullscreen);
-    fullscreenExitBtn.addEventListener('click', exitFullscreen);
-
-    // ----- Drag support for signals panel -----
-    (function makeDraggable(){
-      const dragHead = document.querySelector('#signalsPanel .draggable');
-      const panel = document.getElementById('signalsPanel');
-      if (!dragHead) return;
-      let active=false, startX=0, startY=0, origLeft=0, origTop=0;
-      dragHead.style.cursor='move';
-      dragHead.addEventListener('mousedown', e => {
-        active = true; startX = e.clientX; startY = e.clientY;
-        const rect = panel.getBoundingClientRect();
-        origLeft = rect.left; origTop = rect.top;
-        panel.style.position = 'fixed'; panel.style.zIndex = 9999;
-      });
-      window.addEventListener('mousemove', e => {
-        if (!active) return;
-        const dx = e.clientX - startX, dy = e.clientY - startY;
-        panel.style.left = (origLeft + dx) + 'px';
-        panel.style.top = (origTop + dy) + 'px';
-      });
-      window.addEventListener('mouseup', ()=> active=false);
-    })();
-
-    // ----- event bindings -----
-    loadBtn.addEventListener('click', async () => {
-      const sym = (symbolInput.value||'XAUUSD').trim();
-      titleSymbol.innerText = sym;
-      const interval = intervalSelect.value;
-      statusText.innerText = 'loading...';
-      const candles = await fetchCandles(sym, interval, 500);
-      if (candles && candles.length>0) {
-        plotCandles(candles);
-      } else {
-        statusText.innerText = 'no data';
-        console.warn('no candles fetched for', sym, interval);
-      }
+      } catch(e){}
     });
+    ws.addEventListener('close', () => { debug("WS closed"); status("ws closed"); });
+    ws.addEventListener('error', (e) => { debug("WS error"); });
+  } catch (e) {
+    debug("WS connect failed: " + e.message);
+  }
+}
 
-    toggleTVBtn.addEventListener('click', () => {
-      if (tvContainer.style.display === 'block') showLightweight();
-      else showTradingView(symbolInput.value ? `OANDA:${symbolInput.value}` : 'OANDA:XAUUSD');
-    });
+/* =========================
+   TradingView widget loader (on demand)
+   ========================= */
+let tvLoaded = false;
+async function loadTradingViewWidget(){
+  if(tvLoaded) return;
+  // load script
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = "https://s3.tradingview.com/tv.js";
+    s.onload = () => { tvLoaded = true; res(); };
+    s.onerror = () => rej(new Error("TradingView script load failed"));
+    document.head.appendChild(s);
+  });
 
-    showHideSignalsBtn.addEventListener('click', () => {
-      if (signalsBody.style.display === 'none') { signalsBody.style.display = 'block'; showHideSignalsBtn.innerText='Hide'; }
-      else { signalsBody.style.display = 'none'; showHideSignalsBtn.innerText='Show'; }
-    });
+  // create widget
+  const container = el('tvContainer');
+  container.innerHTML = '';
+  new TradingView.widget({
+    "container_id": "tvContainer",
+    "width": "100%",
+    "height": "600",
+    "symbol": el('symbol').value || "XAUUSD",
+    "interval": "60",
+    "timezone": "Etc/UTC",
+    "theme": "Light",
+    "style": "1",
+    "locale": "en",
+    "toolbar_bg": "#f1f3f6",
+    "enable_publishing": false,
+    "hideideas": true
+  });
+}
 
-    document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
-    document.getElementById('btnMaxMin').addEventListener('click', () => {
-      alert(`Max: ${maxEl.innerText}\nMin: ${minEl.innerText}\nClose: ${closeEl.innerText}`);
-    });
-    document.getElementById('btnToggleTheme').addEventListener('click', (ev)=> {
-      const cur = ev.target.innerText;
-      if (cur === 'Dark') {
-        chart.applyOptions({ layout:{ backgroundColor:'#001428', textColor:'#fff' } }); ev.target.innerText='Light';
-      } else {
-        chart.applyOptions({ layout:{ backgroundColor:'#fff', textColor:'#191919' } }); ev.target.innerText='Dark';
-      }
-    });
+/* =========================
+   UI hooks
+   ========================= */
+el('loadBtn').addEventListener('click', async () => {
+  const sym = el('symbol').value || 'XAUUSD';
+  const intv = el('interval').value || '1min';
+  const lim = parseInt(el('limit').value) || 150;
+  await render(sym, intv, lim);
+});
 
-    document.getElementById('refreshMentor').addEventListener('click', ()=> {
-      // placeholder: request AI mentor summary from backend
-      document.getElementById('mentorText').innerText = 'AI Mentor refreshed (demo).';
-    });
+el('refreshSignals').addEventListener('click', fetchSignals);
+el('showHideSignals').addEventListener('click', () => {
+  const s = el('signals');
+  s.classList.toggle('hidden');
+});
+el('refreshMentor').addEventListener('click', refreshMentor);
 
-    // load demo signals
-    loadSignalsDemo();
+el('healthCheck').addEventListener('click', checkHealth);
+el('connectWS').addEventListener('click', connectWS);
 
-    // init
-    initChart();
-    // auto-load initial
-    loadBtn.click();
+el('tvBtn').addEventListener('click', async () => {
+  const w = el('tvWrap');
+  const open = w.classList.toggle('open');
+  if (open) {
+    try { await loadTradingViewWidget(); } catch(e){ debug("TV load failed: " + e.message); }
+  }
+});
 
-    // expose for debugging in console
-    window.__ICT = { initChart, plotCandles, fetchCandles, lastCandles };
+el('fullscreenBtn').addEventListener('click', () => {
+  const elRoot = document.documentElement;
+  if (!document.fullscreenElement) {
+    elRoot.requestFullscreen?.();
+  } else {
+    document.exitFullscreen?.();
+  }
+});
 
-  })();
-  </script>
+el('toggleTheme').addEventListener('click', () => {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  // destroy and re-init with new theme
+  if (chart) { chart.remove(); chart = null; candleSeries = null; }
+  initChart();
+});
+
+el('btnZoomIn').addEventListener('click', () => { chart.timeScale().zoomIn(); });
+el('btnZoomOut').addEventListener('click', () => { chart.timeScale().zoomOut(); });
+el('btnSavePNG').addEventListener('click', () => {
+  // Lightweight charts can export as image using canvas -> not available in standalone build easily
+  debug("Export not implemented client-side (use server-side capture if needed)");
+});
+
+/* =========================
+   Startup sequence
+   ========================= */
+(async function start() {
+  initChart();
+  checkHealth();
+  // try auto-load small sample
+  const defaultSym = el('symbol').value || 'XAUUSD';
+  const candles = await loadCandles(defaultSym, el('interval').value, +el('limit').value);
+  if (candles.length) candleSeries.setData(candles);
+  fetchSignals();
+  refreshMentor();
+
+  // helpful curl test (visual debugging)
+  try {
+    const c = await fetch(`${API_BASE}/ict/candles?symbol=${defaultSym}&interval=1min&limit=10`);
+    debug("Sample endpoint status: " + c.status);
+  } catch(e){
+    debug("Sample endpoint fetch failed: " + e.message);
+  }
+})();
+
+</script>
 </body>
 </html>

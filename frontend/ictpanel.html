@@ -1,65 +1,439 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Astro ICT Chart Panel</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-  <!-- interact.js for drag & resize -->
-  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+  <style>
+    :root{
+      --bg:#072040; --panel:#0b2a43; --accent:#1ea7ff; --muted:#a8c0d8;
+      --card:#0f3450; --glass: rgba(255,255,255,0.03);
+    }
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Arial;color:#eaf3ff;background:linear-gradient(180deg,var(--bg),#031927);}
+    .app {
+      display:flex;
+      flex-direction:column;
+      height:100vh;
+      gap:8px;
+      padding:12px;
+      box-sizing:border-box;
+    }
+
+    header {
+      display:flex;
+      align-items:center;
+      gap:12px;
+      color:#fff;
+    }
+    header h1{margin:0;font-size:18px;font-weight:600}
+    .controls {margin-left:auto; display:flex; gap:8px; align-items:center;}
+    .btn{
+      background:var(--panel); color:var(--muted); border:1px solid rgba(255,255,255,0.03);
+      padding:6px 10px; border-radius:6px; cursor:pointer; font-size:13px;
+    }
+    .btn.primary{background:linear-gradient(90deg,var(--accent),#0aa0ff); color:#002433; font-weight:700}
+    .row{display:flex; gap:8px;}
+
+    /* main layout */
+    .main {
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      height: calc(100% - 56px);
+    }
+
+    /* left panel - chart */
+    .chart-card{
+      background:var(--card);
+      border-radius:10px;
+      padding:8px;
+      width: 75%;
+      min-width:680px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+      position:relative;
+      user-select:none;
+    }
+
+    /* make chart container draggable */
+    .draggable {
+      touch-action:none;
+    }
+
+    #tv_chart_container { height:calc(100vh - 220px); width:100%; border-radius:6px; overflow:hidden; background:#fff; display:none; }
+
+    #lw_chart {
+      height:calc(100vh - 220px);
+      width:100%;
+      border-radius:6px;
+      overflow:hidden;
+      background: #031827;
+    }
+
+    /* right panel - small panels */
+    .side {
+      width: 300px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .panel {
+      background:var(--panel);
+      border-radius:10px;
+      padding:10px;
+      color:var(--muted);
+    }
+
+    .signals-tray { height:220px; overflow:auto; display:block; }
+
+    .badges { display:flex; gap:10px; margin-top:6px; }
+    .badge {
+      background:var(--glass);
+      color:#dff7ff;
+      padding:6px 8px;
+      border-radius:6px;
+      font-weight:600;
+    }
+
+    .status {
+      position:fixed;
+      left:12px; bottom:12px;
+      background:rgba(0,0,0,0.48); color:#cfeefb;
+      padding:8px 12px; border-radius:8px; font-size:13px;
+      backdrop-filter: blur(4px);
+      z-index:9999;
+    }
+
+    .small { font-size:12px; color:var(--muted) }
+    .tv-button { font-size:13px; padding:6px 8px; border-radius:50px; }
+
+    /* fullscreen helper */
+    .fullscreen {
+      position:fixed;
+      top:0; left:0; right:0; bottom:0;
+      background:#02121a;
+      z-index:9998;
+      padding:16px;
+      box-sizing:border-box;
+    }
+
+    /* draggable cursor */
+    .drag-handle { cursor:grab; }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Astro ICT Chart Panel</h1>
-    <div class="controls">
-      <input id="symbol" value="XAUUSD" />
-      <select id="interval">
-        <option value="1min">1m</option>
-        <option value="5min">5m</option>
-        <option value="15min">15m</option>
-        <option value="1h">1h</option>
-      </select>
-      <button id="loadBtn">Load</button>
-      <button id="tvBtn" title="Open TradingView widget">TV</button>
-      <button id="fullscreenBtn">Fullscreen</button>
-      <label><input id="themeToggle" type="checkbox"> Dark</label>
-    </div>
-  </header>
+  <div class="app">
+    <header>
+      <h1>Astro ICT Chart Panel</h1>
 
-  <main>
-    <div id="chartPanel" class="panel" data-resizable>
-      <div id="chart" class="chart"></div>
-      <div id="chart-stats" class="chart-stats">
-        Min: <span id="minVal">-</span> | Max: <span id="maxVal">-</span> | Close: <span id="closeVal">-</span>
+      <div class="controls">
+        <label class="small">Symbol: <input id="symbol" value="XAUUSD" style="width:110px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#dff7ff"></label>
+        <select id="interval" class="btn" style="background:transparent;color:#dff7ff">
+          <option value="1">1m</option>
+          <option value="5" selected>5m</option>
+          <option value="15">15m</option>
+          <option value="60">1h</option>
+          <option value="D">1D</option>
+        </select>
+
+        <button id="loadBtn" class="btn primary">Load</button>
+        <button id="tvToggle" class="btn tv-button">TV</button>
+        <button id="fullscreenBtn" class="btn">Fullscreen</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <div class="chart-card draggable" id="chartCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div class="drag-handle small" id="dragHandle">☰ Drag Chart</div>
+          <div class="badges">
+            <div class="badge" id="maxBadge">Max: --</div>
+            <div class="badge" id="minBadge">Min: --</div>
+            <div class="badge" id="closeBadge">Close: --</div>
+          </div>
+        </div>
+
+        <div id="lw_chart"></div>
+        <div id="tv_chart_container"></div>
+        <div style="margin-top:8px;color:var(--muted);font-size:13px">
+          <button id="showSignals" class="btn">Show / Hide Signals</button>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="panel">
+          <strong>AI Mentor</strong>
+          <div style="margin-top:8px">
+            <button class="btn" id="refreshMentor">Refresh Mentor</button>
+            <button class="btn" id="speakMentor">Speak</button>
+          </div>
+          <div id="mentorText" style="margin-top:8px;color:#cfeefb">AI mentor demo text — sample watch FVG & liquidity zones. This is demo.</div>
+        </div>
+
+        <div class="panel">
+          <strong>Signals</strong>
+          <div class="signals-tray" id="signalsTray">
+            <div class="small">No signals yet.</div>
+          </div>
+        </div>
+
+        <div class="panel small">
+          <div>Quick: <button id="btnTVSmall" class="btn">Open TV</button></div>
+          <div style="margin-top:8px">Status: <span id="statusText">idle</span></div>
+        </div>
       </div>
     </div>
-
-    <aside id="rightPanel" class="panel right" data-resizable>
-      <h2>AI Mentor</h2>
-      <div id="aiMentor">
-        <button id="refreshMentor">Refresh Mentor</button>
-        <p id="mentorText">AI mentor demo text</p>
-      </div>
-
-      <h2>Signals</h2>
-      <div id="signalsTray" class="signals-tray">
-        <button id="toggleSignals">Show / Hide</button>
-        <div id="signalsList" class="signals-list"></div>
-      </div>
-    </aside>
-  </main>
-
-  <footer>
-    <div id="statusBox">Status: <span id="statusText">idle</span></div>
-  </footer>
-
-  <!-- TV widget container -->
-  <div id="tvWidget" class="tv-widget hidden">
-    <div id="tvClose">✖</div>
-    <div id="tradingview_container" style="width:100%;height:100%;"></div>
   </div>
 
-  <script src="app.js"></script>
+  <div id="statusToast" class="status">Status: idle</div>
+
+  <!-- lightweight-charts CDN -->
+  <script src="https://unpkg.com/lightweight-charts@3.9.0/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- TradingView widget -->
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+
+  <script>
+    (function(){
+      // Config
+      const BACKEND_BASE = location.origin.includes('3000') ? 'http://localhost:8000' : 'http://localhost:8000';
+      const apiCandles = (symbol, interval, limit=200) =>
+        `${BACKEND_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+
+      // UI elements
+      const loadBtn = document.getElementById('loadBtn');
+      const tvToggle = document.getElementById('tvToggle');
+      const tvSmall = document.getElementById('btnTVSmall');
+      const symbolEl = document.getElementById('symbol');
+      const intervalEl = document.getElementById('interval');
+      const statusEl = document.getElementById('statusText');
+      const statusToast = document.getElementById('statusToast');
+      const maxBadge = document.getElementById('maxBadge');
+      const minBadge = document.getElementById('minBadge');
+      const closeBadge = document.getElementById('closeBadge');
+      const signalsTray = document.getElementById('signalsTray');
+
+      // Chart variables
+      let chart = null;
+      let candleSeries = null;
+      let lwContainer = document.getElementById('lw_chart');
+      let tvContainer = document.getElementById('tv_chart_container');
+      let tvWidget = null;
+      let isTV = false;
+
+      function setStatus(t){
+        statusEl.textContent = t;
+        statusToast.textContent = 'Status: ' + t;
+      }
+
+      // initialize lightweight-charts
+      function initLightweight(){
+        if (chart) { chart.remove(); chart = null; candleSeries = null; }
+        lwContainer.innerHTML = '';
+        chart = LightweightCharts.createChart(lwContainer, {
+          layout: { backgroundColor: '#02121a', textColor: '#dff7ff' },
+          rightPriceScale: { borderColor: 'rgba(255,255,255,0.04)' },
+          timeScale: { borderColor: 'rgba(255,255,255,0.04)', timeVisible: true }
+        });
+        candleSeries = chart.addCandlestickSeries({
+          upColor: '#4caf50',
+          downColor: '#ff5252',
+          wickUpColor: '#4caf50',
+          wickDownColor: '#ff5252',
+          borderVisible: false,
+        });
+      }
+
+      async function loadCandles(symbol, interval){
+        setStatus('fetching...');
+        try {
+          const url = apiCandles(symbol, interval, 500);
+          const res = await fetch(url);
+          if(!res.ok) throw new Error('HTTP ' + res.status);
+          const d = await res.json();
+          // expect { symbol: 'XAUUSD', candles: [ { t:..., o:..., h:..., l:..., c:... }, ... ] }
+          const candles = Array.isArray(d.candles) ? d.candles : [];
+          if(candles.length === 0){
+            setStatus('no candles');
+            // show TradingView fallback if available
+            console.warn('No candles returned for', symbol, interval, d);
+            renderEmptyMessage();
+            return;
+          }
+          // convert times (server should already use UNIX ms or ISO strings - we support both)
+          const seriesData = candles.map(c => {
+            // accept {t: <unix ms> or ISO-time or numeric sec}, {o,h,l,c}
+            let time = c.t;
+            // handle seconds -> convert to ISO if number length small
+            if(typeof time === 'number'){
+              // if looks like seconds (10 digits) convert to ms
+              if(time < 1e12) time = (time*1000);
+              // using ms numeric allowed by lightweight-charts as string or number? use new Date -> ISO
+              time = new Date(time).toISOString();
+            }
+            return { time, open: +c.o, high: +c.h, low: +c.l, close: +c.c };
+          });
+
+          // feed chart
+          initLightweight();
+          candleSeries.setData(seriesData);
+
+          // compute max/min/close
+          let max = -Infinity; let min = Infinity;
+          for(const c of seriesData){ max = Math.max(max, c.high); min = Math.min(min, c.low); }
+          const last = seriesData[seriesData.length-1];
+          maxBadge.textContent = 'Max: ' + (isFinite(max)? max.toFixed(4): '--');
+          minBadge.textContent = 'Min: ' + (isFinite(min)? min.toFixed(4): '--');
+          closeBadge.textContent = 'Close: ' + (last? last.close.toFixed(4): '--');
+
+          // sample signal: mark highs/lows on chart with markers (demo)
+          candleSeries.setMarkers(seriesData.slice(-20).map((c,i,arr)=>({
+            time: c.time,
+            position: Math.random()>0.65 ? 'aboveBar' : 'belowBar',
+            color: Math.random()>0.5? 'rgba(255,90,90,0.9)':'rgba(90,255,140,0.9)',
+            shape: Math.random()>0.5 ? 'arrowDown' : 'arrowUp',
+            text: 'S'
+          })));
+
+          // fill signals tray (demo items)
+          signalsTray.innerHTML = '';
+          for(let i=0;i<3;i++){
+            const el = document.createElement('div');
+            el.style.padding = '6px 4px';
+            el.style.borderBottom = '1px dashed rgba(255,255,255,0.03)';
+            el.innerHTML = `<strong>#${i+1}:</strong> ${symbol} demo signal ${i+1} <span style="color:#aeefff;margin-left:6px">(${interval})</span>`;
+            signalsTray.appendChild(el);
+          }
+
+          setStatus('loaded ' + seriesData.length + ' candles');
+        } catch(e){
+          console.error(e);
+          setStatus('fetch error');
+          renderError(e.message || e);
+        }
+      }
+
+      function renderEmptyMessage(){
+        lwContainer.innerHTML = '<div style="color:#b8dff3;padding:40px;text-align:center">No candle data returned from backend.<br/>Check backend API: <code>/ict/candles</code></div>';
+      }
+      function renderError(msg){
+        lwContainer.innerHTML = `<div style="color:#ffb6b6;padding:40px;text-align:center">Error fetching candles: ${String(msg)}</div>`;
+      }
+
+      // TradingView widget init
+      function initTradingView(symbol){
+        // destroy old if present
+        tvContainer.innerHTML = '';
+        try {
+          tvWidget = new TradingView.widget({
+            "width": "100%",
+            "height": "100%",
+            "symbol": "OANDA:" + (symbol||'XAUUSD'),
+            "interval": "60",
+            "timezone": "Etc/UTC",
+            "theme": "light",
+            "style": "1",
+            "locale": "en",
+            "toolbar_bg": "#f1f3f6",
+            "enable_publishing": false,
+            "allow_symbol_change": true,
+            "container_id": "tv_chart_container"
+          });
+        } catch(e){
+          console.warn('TradingView failed to load', e);
+        }
+      }
+
+      // Toggle TradingView / LW
+      function toggleTV(symbol){
+        isTV = !isTV;
+        if(isTV){
+          lwContainer.style.display = 'none';
+          tvContainer.style.display = 'block';
+          initTradingView(symbol);
+        } else {
+          tvContainer.style.display = 'none';
+          lwContainer.style.display = 'block';
+          if(tvWidget && tvWidget.remove) try { tvWidget.remove(); } catch(e){/*ignore*/ }
+        }
+      }
+
+      // Fullscreen helper
+      const fullscreenBtn = document.getElementById('fullscreenBtn');
+      fullscreenBtn.addEventListener('click', ()=> {
+        const el = document.querySelector('.chart-card');
+        if (!document.fullscreenElement) {
+          el.requestFullscreen().catch(err => alert(`Error attempting to enable full-screen: ${err.message}`));
+        } else {
+          document.exitFullscreen();
+        }
+      });
+
+      // small tv button
+      tvSmall.addEventListener('click', ()=> toggleTV(symbolEl.value) );
+      tvToggle.addEventListener('click', ()=> toggleTV(symbolEl.value) );
+
+      // load click
+      loadBtn.addEventListener('click', ()=> {
+        const sym = symbolEl.value.trim() || 'XAUUSD';
+        const interval = intervalEl.value;
+        // If interval is D, (server may want '1D' or 'D') - pass as-is
+        loadCandles(sym, interval);
+        // make sure tv hidden when loading lw
+        if(isTV){ toggleTV(sym); }
+      });
+
+      // drag logic for chart-card - simple pointer events
+      (function setupDrag(){
+        const card = document.getElementById('chartCard');
+        const handle = document.getElementById('dragHandle');
+        let dragging=false, startX=0, startY=0, origLeft=0, origTop=0;
+        handle.addEventListener('pointerdown', e => {
+          dragging=true; startX = e.clientX; startY = e.clientY;
+          const rect = card.getBoundingClientRect();
+          origLeft = rect.left; origTop = rect.top;
+          handle.setPointerCapture(e.pointerId);
+        });
+        window.addEventListener('pointermove', e => {
+          if(!dragging) return;
+          const dx = e.clientX - startX; const dy = e.clientY - startY;
+          card.style.position = 'fixed';
+          card.style.left = (origLeft + dx) + 'px';
+          card.style.top = (origTop + dy) + 'px';
+          card.style.zIndex = 9997;
+        });
+        window.addEventListener('pointerup', e => { dragging=false; try{ handle.releasePointerCapture(e.pointerId); }catch(e){} });
+      })();
+
+      // Show/hide signals tray
+      document.getElementById('showSignals').addEventListener('click', () => {
+        const tray = document.getElementById('signalsTray');
+        tray.style.display = (tray.style.display === 'none') ? 'block' : 'none';
+      });
+
+      // Mentor demo buttons
+      document.getElementById('refreshMentor').addEventListener('click', () => {
+        document.getElementById('mentorText').textContent = 'AI Mentor refreshed at ' + new Date().toLocaleTimeString();
+      });
+      document.getElementById('speakMentor').addEventListener('click', () => {
+        const t = document.getElementById('mentorText').textContent || 'No message';
+        if(window.speechSynthesis){
+          const ut = new SpeechSynthesisUtterance(t);
+          speechSynthesis.speak(ut);
+        } else alert('SpeechSynthesis not available');
+      });
+
+      // initial lightweight setup
+      initLightweight();
+      setStatus('idle');
+
+      // quick auto-load once when page opens
+      setTimeout(()=> {
+        if(symbolEl.value) loadCandles(symbolEl.value, intervalEl.value);
+      }, 400);
+
+      // expose for console debug
+      window.astroICT = { loadCandles, initTradingView, toggleTV, setStatus };
+
+    })();
+  </script>
 </body>
 </html>

@@ -18,9 +18,6 @@
   </style>
 </head>
 <body>
-  <!-- 1) Use a specific version of lightweight-charts that we know works -->
-  <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
-
   <div id="root">
     <div id="left">
       <div id="chart"></div>
@@ -48,9 +45,20 @@
     </div>
   </div>
 
-  <!-- 2) our inline app - uses global factory (no import) -->
+  <!-- Load the library directly with a script tag -->
+  <script src="https://unpkg.com/lightweight-charts@3.7.0/dist/lightweight-charts.standalone.production.js"></script>
+  
+  <!-- Our application code -->
   <script>
-  (function () {
+  // Wait for the library to load
+  window.addEventListener('load', function() {
+    // Check if the library is loaded
+    if (typeof LightweightCharts === 'undefined') {
+      document.getElementById('log').textContent += '\nERROR: LightweightCharts library not loaded!';
+      document.getElementById('status').textContent = 'status: error';
+      return;
+    }
+    
     // --- helpers / config ---
     const chartDiv = document.getElementById('chart');
     const statusEl = document.getElementById('status');
@@ -67,6 +75,7 @@
         logEl.classList.add('error');
       }
     }
+    
     function setStatus(s) { statusEl.textContent = 'status: ' + s; }
 
     // --- chart state ---
@@ -99,9 +108,17 @@
           timeScale: { borderVisible: false },
         });
 
-        // Check if chart was created successfully
-        if (!chart || typeof chart.addCandlestickSeries !== 'function') {
-          throw new Error('Chart object is invalid or does not have addCandlestickSeries method');
+        // Debug: Check chart object
+        log('Chart object created. Type: ' + typeof chart);
+        log('Chart methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(chart)).join(', '));
+
+        // Check if chart was created successfully and has the required method
+        if (!chart) {
+          throw new Error('Failed to create chart object');
+        }
+        
+        if (typeof chart.addCandlestickSeries !== 'function') {
+          throw new Error('Chart object does not have addCandlestickSeries method');
         }
 
         // add candlestick series via API on the created chart object
@@ -239,36 +256,24 @@
     // attach load button
     loadBtn.addEventListener('click', loadAndRender);
 
-    // Initialize the app when the library is loaded
-    function initializeApp() {
-      // Check if the library is loaded
-      if (typeof LightweightCharts !== 'undefined' && 
-          typeof LightweightCharts.createChart === 'function') {
-        
-        log('LightweightCharts library loaded successfully');
-        
-        // create chart initially
-        createOrRecreateChart(false);
+    // Initialize the application
+    function init() {
+      log('LightweightCharts version: ' + LightweightCharts.version);
+      log('Available methods: ' + Object.getOwnPropertyNames(LightweightCharts).join(', '));
+      
+      // create chart initially
+      createOrRecreateChart(false);
 
-        // initial load of default symbol
-        loadAndRender();
-        
-        // expose a global for debugging if needed
-        window.__ICT_CHART = { chart, candleSeries, createOrRecreateChart, loadAndRender };
-      } else {
-        // If not loaded yet, wait and try again
-        log('Waiting for LightweightCharts library to load...');
-        setTimeout(initializeApp, 100);
-      }
+      // initial load of default symbol
+      loadAndRender();
+      
+      // expose a global for debugging if needed
+      window.__ICT_CHART = { chart, candleSeries, createOrRecreateChart, loadAndRender };
     }
 
-    // Start initialization when DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeApp);
-    } else {
-      initializeApp();
-    }
-  })();
+    // Start the application
+    init();
+  });
   </script>
 </body>
 </html>

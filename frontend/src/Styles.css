@@ -1,0 +1,14 @@
+.app-header{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#0f3c70;color:#fff}
+.controls input{padding:6px;margin-right:8px}
+.main-content{display:flex;gap:12px;padding:12px}
+.panel{background:#071526;color:#dff7ff;padding:10px;border-radius:8px;margin-bottom:12px}
+.chart-wrapper{background:#02131a;border-radius:8px;padding:8px}
+.chart-toolbar{display:flex;gap:8px;margin-bottom:8px}
+.chart-toolbar button{padding:6px 10px;border-radius:6px;background:#11283f;color:#dff7ff;border:none;cursor:pointer}
+.chart-toolbar button.active{background:#1ea7ff;color:#002}
+.chart-canvas{width:100%;height:480px}
+.draw-overlay{position:absolute;top:0;left:0;pointer-events:none}
+.signals-overlay{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:6px}
+.signal-chip{background:rgba(255,255,255,0.06);padding:6px 8px;border-radius:6px;color:#dff7ff}
+.ai-mentor pre{white-space:pre-wrap}
+.backtest pre{background:#01121a;padding:8px;border-radius:6px;overflow:auto}

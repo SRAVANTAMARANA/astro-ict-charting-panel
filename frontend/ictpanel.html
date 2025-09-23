@@ -2,414 +2,244 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Astro ICT Chart Panel</title>
+  <title>Astro ICT Chart Panel - standalone test</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- Lightweight Charts -->
-  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-  <!-- TradingView widget (official) -->
-  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
   <style>
-    :root{
-      --bg-light:#f6f9fb;
-      --panel-bg:#ffffff;
-      --text:#0b1220;
-      --muted:#6b7280;
-      --accent:#0369a1;
-      --dark-bg:#071022;
-      --dark-panel:#07172a;
-      --dark-text:#dbeafe;
-    }
-    html,body{height:100%;margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg-light);color:var(--text);}
-    .app{display:flex;height:100vh;gap:8px;padding:12px;box-sizing:border-box}
-    .left{flex:1;display:flex;flex-direction:column;gap:8px}
-    .topbar{display:flex;align-items:center;gap:8px}
-    .title{font-weight:700;font-size:20px}
-    .controls{margin-left:auto;display:flex;gap:8px;align-items:center}
-    .btn{padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer}
-    .btn.primary{background:var(--accent);color:#fff;border:none}
-    .panel{background:var(--panel-bg);border-radius:8px;box-shadow:0 6px 18px rgba(12,12,16,0.06);padding:8px;overflow:hidden}
-    #chartContainer{height:60vh;border-radius:6px;position:relative}
-    .sidebar{width:360px;display:flex;flex-direction:column;gap:8px}
-    .signals{height:40vh;padding:8px;overflow:auto}
-    .tray-toggle{position:fixed;right:20px;bottom:20px;z-index:40}
-    .tv-overlay{position:fixed;inset:4%;z-index:60;background:#fff;border-radius:8px;box-shadow:0 20px 60px rgba(2,6,23,0.6);display:none;flex-direction:column;overflow:hidden}
-    .tv-overlay .bar{padding:6px;background:rgba(0,0,0,0.03);display:flex;align-items:center;gap:8px}
-    .tv-overlay .body{flex:1;display:flex}
-    .stats{display:flex;gap:12px;margin-top:8px;align-items:center}
-    .stat{background:rgba(0,0,0,0.03);padding:6px 8px;border-radius:6px}
-    .hidden{display:none!important}
-    /* full-screen */
-    .fullscreen{position:fixed;left:0;top:0;width:100%;height:100%;z-index:100;background:var(--panel-bg);padding:12px}
-    /* dark theme */
-    .dark{background:var(--dark-bg);color:var(--dark-text)}
-    .dark .panel{background:var(--dark-panel)}
-    /* small utilities */
-    input[type=text]{padding:6px;border-radius:6px;border:1px solid #d1d5db}
-    select{padding:6px;border-radius:6px}
+    html,body { height:100%; margin:0; font-family: Arial, Helvetica, sans-serif; }
+    #root { display:flex; height:100%; gap:12px; padding:12px; box-sizing:border-box; background:#f8fafc; }
+    #left { width:72%; min-width:480px; background:#fff; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.06); display:flex; flex-direction:column; }
+    #chart { flex:1; min-height:360px; }
+    #controls { padding:8px 12px; display:flex; gap:8px; align-items:center; border-top:1px solid #eef2f7; }
+    .btn { padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
+    #right { width:28%; min-width:240px; background:#fff; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.06); padding:12px; box-sizing:border-box; }
+    .muted { color:#6b7280; font-size:13px; }
+    pre { background:#0b1220; color:#dbeafe; padding:8px; border-radius:6px; overflow:auto; max-height:240px; }
   </style>
 </head>
 <body>
-  <div class="app" id="appRoot">
-    <div class="left">
-      <div class="topbar">
-        <div class="title">Astro ICT Chart Panel</div>
-        <div class="controls">
-          <label>Symbol <input id="symbol" type="text" value="XAUUSD" /></label>
-          <label>Interval
-            <select id="interval">
-              <option value="1min">1m</option>
-              <option value="5min" selected>5m</option>
-              <option value="15min">15m</option>
-              <option value="1h">1h</option>
-              <option value="1d">1d</option>
-            </select>
-          </label>
-          <button class="btn primary" id="loadBtn">Load</button>
-          <button class="btn" id="tvBtn" title="Open TradingView">TV</button>
-          <button class="btn" id="fullscreenBtn" title="Full screen">Fullscreen</button>
-          <button class="btn" id="themeBtn" title="Toggle theme">Dark</button>
-        </div>
-      </div>
+  <!-- 1) standalone bundle (must load BEFORE our inline app) -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
 
-      <div class="panel" id="chartPanel">
-        <div id="chartContainer"></div>
-        <div class="stats" id="statRow">
-          <div class="stat" id="statLast">Last: —</div>
-          <div class="stat" id="statHigh">High: —</div>
-          <div class="stat" id="statLow">Low: —</div>
-          <div class="stat" id="statClose">Close: —</div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-weight:600">AI Mentor</div>
-          <div><button id="refreshMentor" class="btn">Refresh Mentor</button></div>
-        </div>
-        <div style="padding:8px;color:var(--muted)">AI mentor demo text</div>
+  <div id="root">
+    <div id="left">
+      <div id="chart"></div>
+      <div id="controls">
+        <select id="symbol" class="btn">
+          <option value="XAUUSD">XAUUSD</option>
+          <option value="BTCUSDT">BTCUSDT</option>
+          <option value="EURUSD">EURUSD</option>
+        </select>
+        <select id="interval" class="btn">
+          <option value="1min">1m</option>
+          <option value="5min" selected>5m</option>
+          <option value="1h">1h</option>
+          <option value="1d">1d</option>
+        </select>
+        <button id="loadBtn" class="btn">Load</button>
+        <button id="tvBtn" class="btn">Open TV</button>
+        <span id="status" class="muted">status: idle</span>
       </div>
     </div>
 
-    <div class="sidebar">
-      <div class="panel signals" id="signalsPanel">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-weight:600">Signals</div>
-          <div><button id="hideSignals" class="btn">Hide</button></div>
-        </div>
-        <div id="signalsList" style="margin-top:8px">No signals yet</div>
-      </div>
-
-      <div class="panel">
-        <div style="font-weight:600;margin-bottom:8px">Quick</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" data-interval="1min">1m</button>
-          <button class="btn" data-interval="5min">5m</button>
-          <button class="btn" data-interval="15min">15m</button>
-          <button class="btn" data-interval="1h">1h</button>
-          <button class="btn" id="btnTVSmall" title="Show TradingView small">TV small</button>
-        </div>
-      </div>
-
+    <div id="right">
+      <div class="muted">Signals / Logs</div>
+      <pre id="log">ready.</pre>
     </div>
   </div>
 
-  <!-- TradingView overlay -->
-  <div class="tv-overlay" id="tvOverlay" role="dialog" aria-hidden="true">
-    <div class="bar"><strong>TradingView</strong><div style="margin-left:auto"><button id="closeTv" class="btn">Close</button></div></div>
-    <div class="body">
-      <div id="tvWidget" style="flex:1"></div>
-    </div>
-  </div>
+  <!-- 2) our inline app - uses global factory (no import) -->
+  <script>
+  (function () {
+    // --- helpers / config ---
+    const chartDiv = document.getElementById('chart');
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const symbolSel = document.getElementById('symbol');
+    const intervalSel = document.getElementById('interval');
+    const loadBtn = document.getElementById('loadBtn');
+    const tvBtn = document.getElementById('tvBtn');
 
-<script>
-(function(){
-  // Basic config
-  const CHART_CONTAINER_ID = 'chartContainer';
-  const BACKEND_BASE = ''; // empty => same origin. If your backend sits on a different origin set e.g. 'http://localhost:8000'
-  const CANDLES_API = (s, interval, limit=200) => `${BACKEND_BASE}/ict/candles?symbol=${encodeURIComponent(s)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+    function log(msg){ logEl.textContent += '\\n' + msg; logEl.scrollTop = 1e9; }
+    function setStatus(s){ statusEl.textContent = 'status: ' + s; }
 
-  // state
-  let chart = null;
-  let candleSeries = null;
-  let themeDark = false;
-  let symbolEl = document.getElementById('symbol');
-  let intervalEl = document.getElementById('interval');
-  let loadBtn = document.getElementById('loadBtn');
-  let tvBtn = document.getElementById('tvBtn');
-  let fullscreenBtn = document.getElementById('fullscreenBtn');
-  let themeBtn = document.getElementById('themeBtn');
-  let signalsPanel = document.getElementById('signalsPanel');
-  let hideSignals = document.getElementById('hideSignals');
-  let tvOverlay = document.getElementById('tvOverlay');
-  let closeTv = document.getElementById('closeTv');
-  let btnTVSmall = document.getElementById('btnTVSmall');
-  let statLast = document.getElementById('statLast');
-  let statHigh = document.getElementById('statHigh');
-  let statLow = document.getElementById('statLow');
-  let statClose = document.getElementById('statClose');
+    // 1) find the factory: window.createChart (standalone) or window.LightweightCharts.createChart
+    const factory = window.createChart ||
+                    (window.LightweightCharts && window.LightweightCharts.createChart) ||
+                    null;
 
-  // helpers
-  function applyTheme() {
-    document.body.classList.toggle('dark', themeDark);
-    themeBtn.textContent = themeDark ? 'Light' : 'Dark';
-  }
-
-  function safeCreateChart() {
-    // remove existing chart if any
-    if (chart && typeof chart.remove === 'function') {
-      try { chart.remove(); } catch(e) { console.warn('chart.remove failed', e); }
-    }
-    const container = document.getElementById(CHART_CONTAINER_ID);
-    const w = container.clientWidth;
-    const h = Math.max(300, Math.floor(window.innerHeight * 0.6));
-    // createChart comes from lightweight-charts standalone build
-    if (!window.LightweightCharts && !window.createChart) {
-      console.error('Lightweight Charts library not available');
-      container.innerHTML = '<div style="padding:20px;color:#b91c1c">Chart library not loaded.</div>';
+    if (!factory) {
+      setStatus('lightweight-charts not loaded');
+      log('ERROR: lightweight-charts standalone not available on window.');
       return;
     }
-    const factory = window.createChart || (window.LightweightCharts && window.LightweightCharts.createChart);
-    chart = factory(container, {
-      width: w,
-      height: h,
-      layout: {
-        background: { color: themeDark ? '#07172a' : '#ffffff' },
-        textColor: themeDark ? '#dbeafe' : '#0b1220'
-      },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false }
-    });
-    // add candlestick series
-    if (chart && typeof chart.addCandlestickSeries === 'function') {
-      candleSeries = chart.addCandlestickSeries();
-      // set-up resize handler
-      window.addEventListener('resize', () => {
-        try { chart.applyOptions({ width: container.clientWidth, height: Math.max(300, Math.floor(window.innerHeight*0.6)) }); } catch(e){/*ignore*/};
-      });
-    } else {
-      console.error('chart.addCandlestickSeries not available');
-    }
-  }
 
-  // update stats
-  function updateStatsFromData(data) {
-    if (!data || !Array.isArray(data) || data.length === 0) return;
-    // assume data is array of {time, open, high, low, close}
-    const last = data[data.length-1];
-    statLast.textContent = `Last: ${last.close ?? '-'}`;
-    let max = Number.NEGATIVE_INFINITY, min = Number.POSITIVE_INFINITY;
-    data.forEach(d => {
-      if (d.high != null) max = Math.max(max, +d.high);
-      if (d.low != null) min = Math.min(min, +d.low);
-    });
-    statHigh.textContent = `High: ${isFinite(max) ? max : '-'}`;
-    statLow.textContent = `Low: ${isFinite(min) ? min : '-'}`;
-    statClose.textContent = `Close: ${last.close ?? '-'}`;
-  }
+    // --- chart state ---
+    let chart = null;
+    let candleSeries = null;
 
-  // data fetch (with fallback synthetic)
-  async function fetchCandles(symbol, interval, limit=200) {
-    const url = CANDLES_API(symbol, interval, limit);
-    try {
-      const res = await fetch(url, {cache:'no-store'});
-      if (!res.ok) throw new Error('HTTP '+res.status);
-      const json = await res.json();
-      // if your backend returns {symbol:..., candles:[...]} adjust here
-      if (Array.isArray(json.candles)) return json.candles.map(normalizeCandle);
-      // support older format: array
-      if (Array.isArray(json)) return json.map(normalizeCandle);
-      // fallback: maybe object with symbol->candles
-      return [];
-    } catch (err) {
-      console.warn('fetchCandles failed', err);
-      // fallback sample data (synthetic)
-      return makeSampleCandles(symbol, interval, limit);
-    }
-  }
-
-  function normalizeCandle(c) {
-    // Accept multiple common field names
-    return {
-      time: c.time || c.datetime || c.t || c.timestamp,
-      open: c.open != null ? +c.open : (c.o != null ? +c.o : null),
-      high: c.high != null ? +c.high : (c.h != null ? +c.h : null),
-      low: c.low != null ? +c.low : (c.l != null ? +c.l : null),
-      close: c.close != null ? +c.close : (c.c != null ? +c.c : null),
-      volume: c.volume != null ? +c.volume : (c.v != null ? +c.v : 0),
-    };
-  }
-
-  function makeSampleCandles(symbol, interval, limit) {
-    // small synthetic generator to render something
-    const result = [];
-    let base = 1000;
-    if (/XAU|GOLD|XAUUSD/i.test(symbol)) base = 1900;
-    if (/BTC|XBT|BTCUSD/i.test(symbol)) base = 30000;
-    let t = Math.floor(Date.now()/1000) - limit*60;
-    for (let i=0;i<Math.min(limit,500);i++){
-      const o = base + (Math.sin(i/8)*5) + ((Math.random()-0.5)*2);
-      const c = o + ((Math.random()-0.5)*3);
-      const h = Math.max(o,c) + Math.random()*2;
-      const l = Math.min(o,c) - Math.random()*2;
-      result.push({ time: Math.floor((t + i*60)/60)*60, open:o.toFixed(3), high:h.toFixed(3), low:l.toFixed(3), close:c.toFixed(3), volume: Math.round(Math.random()*300) });
-    }
-    return result;
-  }
-
-  // render data to chart
-  async function loadAndRender(symbol, interval) {
-    if (!chart) safeCreateChart();
-    if (!candleSeries) {
-      console.error('no candleSeries to set data');
-      return;
-    }
-    const raw = await fetchCandles(symbol, interval, 500);
-    if (!raw || raw.length === 0) {
-      console.warn('no candle data');
-      candleSeries.setData([]);
-      return;
-    }
-    // convert time: if numeric epoch seconds -> use UNIX sec; if ISO string -> pass as string
-    const formatted = raw.map(r => {
-      const time = (typeof r.time === 'number' || /^\d+$/.test(r.time)) ? Math.floor(Number(r.time)) : r.time;
-      return { time, open: +r.open, high: +r.high, low: +r.low, close: +r.close };
-    });
-    try {
-      candleSeries.setData(formatted);
-      updateStatsFromData(formatted);
-      // add markers for last candle top/bottom - we set a price line
-      const last = formatted[formatted.length-1];
-      if (last) {
-        // remove previous price line(s)
-        if (candleSeries && typeof candleSeries.applyOptions === 'function') {
-          // not all versions support price line manipulation; keep minimal
-          // adding markers:
-          candleSeries.setMarkers([{ time: last.time, position: last.close >= last.open ? 'aboveBar' : 'belowBar', color: '#ffb020', shape: 'circle', text: `Close ${last.close}` }]);
-        }
-      }
-    } catch(e) {
-      console.error('setData error', e);
-    }
-  }
-
-  // TradingView small widget / overlay
-  function openTradingView(symbol) {
-    // overlay open
-    tvOverlay.style.display = 'flex';
-    tvOverlay.setAttribute('aria-hidden','false');
-    // mount tradingview widget
-    // ensure dv script available
-    try {
-      if (typeof TradingView === 'undefined') {
-        // remote tv.js didn't load
-        (function(){
-          const s = document.createElement('script');
-          s.src = "https://s3.tradingview.com/tv.js";
-          s.onload = () => initTv();
-          document.head.appendChild(s);
-        })();
-      } else initTv();
-    } catch(e){
-      console.error('tv init err', e);
-    }
-    function initTv() {
+    // create or recreate chart
+    function createOrRecreateChart(themeDark=false) {
       try {
-        new TradingView.widget({
-          "width": "100%",
-          "height": "100%",
-          "symbol": symbol || "OANDA:XAUUSD",
-          "interval": "60",
-          "timezone": "Etc/UTC",
-          "theme": themeDark ? "Dark" : "Light",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#f1f3f6",
-          "enable_publishing": false,
-          "allow_symbol_change": true,
-          "container_id": "tvWidget"
+        if (chart) {
+          // remove old chart
+          try { chart.remove(); } catch(e){ /* ignore */ }
+          chart = null;
+          candleSeries = null;
+        }
+
+        const layout = {
+          background: { color: themeDark ? '#0b1220' : '#ffffff' },
+          textColor: themeDark ? '#dbeafe' : '#333',
+          fontSize: 12,
+          fontFamily: "Arial"
+        };
+
+        chart = factory(chartDiv, {
+          width: chartDiv.clientWidth,
+          height: chartDiv.clientHeight,
+          layout,
+          rightPriceScale: { borderVisible: false },
+          timeScale: { borderVisible: false },
         });
+
+        // add candlestick series via API on the created chart object
+        // (standalone uses the global factory; API is the same)
+        candleSeries = chart.addCandlestickSeries({
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          wickColor: '#737375',
+          borderVisible: true
+        });
+
+        chart.timeScale().subscribeVisibleTimeRangeChange(range => {
+          // called when user changes zoom/scroll; you can update stats here
+          // console.log('visible range changed', range);
+        });
+
+        setStatus('chart created');
       } catch (err) {
-        console.error('tradingview widget error', err);
+        setStatus('error creating chart');
+        log('createChart error: ' + (err && err.message ? err.message : String(err)));
+        console.error(err);
       }
     }
-  }
 
-  // UI wiring
-  loadBtn.addEventListener('click', () => {
-    const sym = symbolEl.value.trim() || 'XAUUSD';
-    const iv = intervalEl.value || '5min';
-    loadAndRender(sym, iv);
-  });
-
-  document.querySelectorAll('.panel .btn[data-interval]').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      const iv = e.currentTarget.dataset.interval;
-      intervalEl.value = iv;
-      loadBtn.click();
+    // resize handler
+    window.addEventListener('resize', () => {
+      if (!chart) return;
+      chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
     });
-  });
 
-  tvBtn.addEventListener('click', ()=> openTradingView(symbolEl.value || 'XAUUSD'));
-  btnTVSmall.addEventListener('click', ()=> openTradingView(symbolEl.value || 'XAUUSD'));
-  closeTv.addEventListener('click', ()=> { tvOverlay.style.display='none'; tvOverlay.setAttribute('aria-hidden','true'); document.getElementById('tvWidget').innerHTML=''; });
-
-  // fullscreen
-  fullscreenBtn.addEventListener('click', () => {
-    const panel = document.getElementById('chartPanel');
-    if (!panel.classList.contains('fullscreen')) {
-      panel.classList.add('fullscreen');
-      fullscreenBtn.textContent = 'Exit';
-      // expand chart
-      setTimeout(()=> chart && chart.applyOptions({ width: panel.clientWidth, height: panel.clientHeight }), 200);
-    } else {
-      panel.classList.remove('fullscreen');
-      fullscreenBtn.textContent = 'Fullscreen';
-      setTimeout(()=> chart && chart.applyOptions({ width: document.getElementById(CHART_CONTAINER_ID).clientWidth, height: Math.max(300, Math.floor(window.innerHeight*0.6)) }), 200);
-    }
-  });
-
-  // signals tray
-  hideSignals.addEventListener('click', ()=> {
-    if (signalsPanel.classList.contains('hidden')) {
-      signalsPanel.classList.remove('hidden'); hideSignals.textContent='Hide';
-    } else { signalsPanel.classList.add('hidden'); hideSignals.textContent='Show'; }
-  });
-
-  // theme
-  themeBtn.addEventListener('click', ()=> {
-    themeDark = !themeDark; applyTheme();
-    // re-create chart to update background colors & price colors reliably
-    setTimeout(()=> { safeCreateChart(); loadBtn.click(); }, 60);
-  });
-
-  // initial create chart
-  safeCreateChart();
-
-  // load first dataset
-  setTimeout(()=> loadAndRender(symbolEl.value || 'XAUUSD', intervalEl.value || '5min'), 200);
-
-  // enable keyboard: press L to reload
-  window.addEventListener('keydown', (e)=> {
-    if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault(); loadBtn.click();
-    }
-  });
-
-  // small health poll to backend if available
-  async function backendHealthPing() {
-    try {
-      const res = await fetch((BACKEND_BASE||'') + '/ict/health');
-      if (res.ok) {
-        const j = await res.json();
-        // show last status maybe
-        console.info('backend health', j);
+    // fetch candles from backend
+    async function fetchCandles(symbol, interval, limit=200) {
+      // Replace this path with your backend endpoint if different
+      const url = `/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+      setStatus('fetching ' + symbol + ' ' + interval);
+      try {
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+        const data = await resp.json();
+        // expect data.candles or data array. Accept both shapes:
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data.candles)) return data.candles;
+        // if server response wrapper different, attempt to extract
+        return data;
+      } catch (err) {
+        log('fetch error: ' + err.message);
+        throw err;
       }
-    } catch(e){/* ignore */}
-  }
-  backendHealthPing();
+    }
 
-})();
-</script>
+    // minimal fallback sample candles if backend not available
+    function sampleCandles() {
+      return [
+        {time: '2025-09-23T15:35:00Z', open: 1930, high:1935, low:1927, close:1932, volume:10},
+        {time: '2025-09-23T15:40:00Z', open: 1932, high:1936, low:1930, close:1934, volume:8},
+        {time: '2025-09-23T15:45:00Z', open: 1934, high:1938, low:1931, close:1936, volume:12},
+        {time: '2025-09-23T15:50:00Z', open: 1936, high:1940, low:1934, close:1939, volume:15},
+      ];
+    }
+
+    // normalize server candle objects to lightweight-charts input:
+    // time should be either unix seconds (number) or ISO string 'YYYY-MM-DDTHH:mm:ssZ'
+    function normalizeCandles(raw) {
+      if (!Array.isArray(raw)) return [];
+      return raw.map(c => {
+        // accept both {t,open,high,low,close,volume} or {time,open,high...} or {dt, o,h,l,c}
+        const time = c.time || c.t || c.dt || c.timestamp || c.date || null;
+        // if numeric timestamp (ms) convert to ISO seconds string:
+        if (typeof time === 'number') {
+          // assume ms -> convert to seconds (UNIX) or to ISO string accepted by library
+          const maybeMs = time > 1e12; // ms
+          if (maybeMs) {
+            return { time: new Date(time).toISOString(), open: +c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
+          } else {
+            // seconds
+            return { time: time, open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
+          }
+        } else if (typeof time === 'string') {
+          // if it's already an ISO or date-like string, pass through
+          return { time: time, open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
+        } else {
+          // fallback: use index time -> not ideal
+          return { time: new Date().toISOString(), open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume: c.volume||0 };
+        }
+      });
+    }
+
+    async function loadAndRender() {
+      const symbol = symbolSel.value || 'XAUUSD';
+      const interval = intervalSel.value || '5min';
+      try {
+        setStatus('loading ' + symbol);
+        log('loading ' + symbol + ' / ' + interval);
+        let raw;
+        try {
+          raw = await fetchCandles(symbol, interval, 500);
+          log('fetched ' + (Array.isArray(raw) ? raw.length : JSON.stringify(Object.keys(raw))));
+        } catch (err) {
+          log('fetch failed - using sample data');
+          raw = sampleCandles();
+        }
+
+        const data = normalizeCandles(raw);
+        if (!data || data.length === 0) {
+          log('no candle data found; using sample');
+          candleSeries.setData(sampleCandles());
+          setStatus('rendered (sample)');
+          return;
+        }
+
+        candleSeries.setData(data);
+        chart.timeScale().fitContent();
+        setStatus('rendered ' + symbol);
+      } catch (err) {
+        setStatus('render error');
+        log('render error: ' + (err && err.message ? err.message : String(err)));
+        console.error(err);
+      }
+    }
+
+    // open tradingview website (lightweight button)
+    tvBtn.addEventListener('click', () => {
+      window.open('https://www.tradingview.com/chart/', '_blank');
+    });
+
+    // attach load button
+    loadBtn.addEventListener('click', loadAndRender);
+
+    // create chart initially
+    createOrRecreateChart(false);
+
+    // initial load of default symbol
+    loadAndRender();
+
+    // expose a global for debugging if needed
+    window.__ICT_CHART = { chart, candleSeries, createOrRecreateChart, loadAndRender };
+
+    // sanity check: is factory available?
+    log('factory:' + (typeof factory === 'function' ? 'ok' : String(factory)));
+  })();
+  </script>
 </body>
 </html>

@@ -1,89 +1,232 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Astro ICT Chart Panel</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <title>Astro ICT Chart Panel (Fixed)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { margin:0; font-family:sans-serif; background:#f5f5f5; }
-    #chart { width:100%; height:500px; }
-    #controls { margin:10px; }
-    button { margin:2px; padding:5px 10px; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; background:#f7f9fc; color:#111}
+    header{padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #e6eef8}
+    #controls{padding:10px 16px; display:flex; gap:8px; align-items:center}
+    #chart { width:100%; height:520px; }
+    button{padding:6px 10px; cursor:pointer}
+    input,select{padding:6px;border:1px solid #ccc;border-radius:4px}
+    #log {font-size:12px;color:#444;padding:8px 16px; background:#fff; border-top:1px solid #eee; height:120px; overflow:auto;}
   </style>
 </head>
 <body>
-  <h2>Astro ICT Chart Panel</h2>
+  <header>
+    <h3 style="margin:0">Astro ICT Chart Panel</h3>
+    <small style="color:#556;padding-left:8px">(defensive build)</small>
+  </header>
 
   <div id="controls">
-    <input id="symbol" value="BTCUSDT" />
-    <select id="interval">
-      <option value="1min">1m</option>
-      <option value="5min">5m</option>
-      <option value="15min">15m</option>
-    </select>
-    <button onclick="loadData()">Load</button>
+    <label>Symbol: <input id="symbol" value="BTCUSDT"></label>
+    <label>Interval:
+      <select id="interval">
+        <option value="1min">1m</option>
+        <option value="5min" selected>5m</option>
+        <option value="15min">15m</option>
+        <option value="1h">1h</option>
+      </select>
+    </label>
+    <button id="loadBtn">Load</button>
+    <button id="fullscreenBtn">Fullscreen</button>
+    <span id="status" style="margin-left:8px;color:#2b6">status: idle</span>
   </div>
 
   <div id="chart"></div>
 
-  <div>
-    <button onclick="toggleFullscreen()">Fullscreen</button>
-  </div>
+  <div id="log" aria-live="polite"></div>
 
+  <!-- Use the standalone bundle so global LightweightCharts is available -->
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+
   <script>
-    let chart, candleSeries;
+  (function(){
+    const logEl = document.getElementById('log');
+    function log(...args){ console.log(...args); logEl.innerText += args.map(a=> (typeof a === 'object' ? JSON.stringify(a) : String(a)) ).join(' ') + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+    function setStatus(s){ document.getElementById('status').innerText = 'status: ' + s; }
+
+    let chart = null;
+    let candleSeries = null;
+
+    // helper to obtain createChart function from either global or module style
+    function getCreateChart() {
+      // If using standalone script, LightweightCharts.createChart exists
+      if (window.LightweightCharts && typeof window.LightweightCharts.createChart === 'function') {
+        log('Using global LightweightCharts.createChart');
+        return window.LightweightCharts.createChart;
+      }
+      // If a bundler exposed a createChart symbol globally (rare), try it
+      if (typeof createChart === 'function') {
+        log('Using global createChart');
+        return createChart;
+      }
+      log('No createChart available globally. Ensure you load standalone build (script tag).');
+      return null;
+    }
 
     function recreateChart() {
       const chartDiv = document.getElementById('chart');
-      if (chart) chart.remove();
-      chart = LightweightCharts.createChart(chartDiv, {
-        width: chartDiv.clientWidth,
-        height: chartDiv.clientHeight,
-        layout: { background:{ color:'#ffffff' }, textColor:'#333' },
-        rightPriceScale: { borderVisible:false },
-        timeScale:{ borderVisible:false }
+      if (!chartDiv) {
+        log('chart div not found');
+        return;
+      }
+
+      // remove prior instance if exists
+      try {
+        if (chart && typeof chart.remove === 'function') {
+          chart.remove();
+          chart = null;
+        }
+      } catch(e){
+        log('error removing prior chart', e);
+      }
+
+      const createChartFunc = getCreateChart();
+      if (!createChartFunc) {
+        log('createChart not available - cannot create chart');
+        setStatus('error (no createChart)');
+        return;
+      }
+
+      // create chart instance
+      try {
+        chart = createChartFunc(chartDiv, {
+          width: chartDiv.clientWidth,
+          height: chartDiv.clientHeight,
+          layout: { background: { color: '#ffffff' }, textColor: '#111' },
+          rightPriceScale: { borderVisible: false },
+          timeScale: { borderVisible: false },
+        });
+        log('chart created', !!chart);
+        // validate chart supports addCandlestickSeries
+        if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+          log('chart object does not expose addCandlestickSeries. Chart object:', chart);
+          setStatus('error (invalid chart API)');
+          return;
+        }
+        candleSeries = chart.addCandlestickSeries();
+        log('candlestick series added');
+        setStatus('ready');
+      } catch (err) {
+        console.error(err);
+        log('failed creating chart:', err && err.message ? err.message : err);
+        setStatus('error (create failed)');
+      }
+    }
+
+    async function fetchCandles(symbol, interval, limit=200) {
+      const url = `${location.protocol}//${location.hostname}:8000/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+      log('fetching', url);
+      setStatus('loading');
+      try {
+        const r = await fetch(url);
+        if (!r.ok) {
+          log('fetch status', r.status, r.statusText);
+          setStatus('error (fetch)');
+          return null;
+        }
+        const data = await r.json();
+        return data;
+      } catch(e) {
+        log('fetch error', e);
+        setStatus('error (network)');
+        return null;
+      } finally {
+        // no-op
+      }
+    }
+
+    function formatCandles(rawCandles) {
+      // expects array of {time, open, high, low, close} where time may be ISO string
+      return rawCandles.map(c => {
+        let t = c.time;
+        // if ISO string convert to unix seconds
+        if (typeof t === 'string') {
+          const dt = new Date(t);
+          t = Math.floor(dt.getTime() / 1000);
+        } else if (typeof t === 'number' && String(t).length > 10) {
+          // milliseconds -> seconds
+          t = Math.floor(t / 1000);
+        }
+        return {
+          time: t,
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close)
+        };
       });
-      candleSeries = chart.addCandlestickSeries(); // ✅ fixed capitalization
     }
 
     async function loadData() {
-      const symbol = document.getElementById('symbol').value;
-      const interval = document.getElementById('interval').value;
-      const url = `http://localhost:8000/ict/candles?symbol=${symbol}&interval=${interval}&limit=200`;
-
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.candles && data.candles.length > 0) {
-          const formatted = data.candles.map(c => ({
-            time: Math.floor(new Date(c.time).getTime() / 1000),
-            open: c.open, high: c.high, low: c.low, close: c.close
-          }));
-          candleSeries.setData(formatted);
-        } else {
-          console.warn('No candle data', data);
+      if (!candleSeries) {
+        log('No candleSeries - recreating chart');
+        recreateChart();
+        if (!candleSeries) {
+          log('Still no candleSeries, abort load');
+          return;
         }
-      } catch (e) {
-        console.error('Error loading data', e);
+      }
+      const symbol = document.getElementById('symbol').value.trim();
+      const interval = document.getElementById('interval').value;
+      const payload = await fetchCandles(symbol, interval, 500);
+      if (!payload) return;
+      // Some backends return { candles: [...] } or directly an array
+      const raw = Array.isArray(payload) ? payload : (payload.candles || payload.data || []);
+      if (!raw || raw.length === 0) {
+        log('No candles returned', payload);
+        setStatus('no-data');
+        return;
+      }
+      const formatted = formatCandles(raw);
+      try {
+        candleSeries.setData(formatted);
+        log('setData ->', formatted.length, 'points');
+        setStatus('loaded');
+      } catch(e) {
+        log('setData error', e);
+        setStatus('error (setData)');
       }
     }
 
-    function toggleFullscreen() {
-      const elem = document.getElementById('chart');
+    // fullscreen toggle
+    function toggleFullscreen(){
+      const chartDiv = document.getElementById('chart');
       if (!document.fullscreenElement) {
-        elem.requestFullscreen().catch(err => console.error(err));
+        chartDiv.requestFullscreen?.().catch(e=>log('fs error', e));
       } else {
-        document.exitFullscreen();
+        document.exitFullscreen?.();
       }
     }
 
-    window.addEventListener('resize', () => {
-      if(chart) chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
+    // wire UI
+    document.getElementById('loadBtn').addEventListener('click', ()=> loadData());
+    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+    // recreate on resize
+    window.addEventListener('resize', ()=> {
+      const chartDiv = document.getElementById('chart');
+      if (!chart) return;
+      try {
+        chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
+      } catch(e){ log('resize applyOptions error', e); }
     });
 
-    recreateChart();
-    loadData();
+    // init after DOM load
+    window.addEventListener('DOMContentLoaded', async () => {
+      log('DOM ready, recreating chart now...');
+      recreateChart();
+      // small delay to ensure backend containers are up when user restarts everything
+      setTimeout(()=>{ loadData(); }, 250);
+    });
+
+    // expose for debugging
+    window._ict = { recreateChart, loadData, getCreateChart };
+
+  })();
   </script>
 </body>
 </html>

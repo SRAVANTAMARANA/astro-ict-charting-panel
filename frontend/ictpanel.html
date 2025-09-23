@@ -14,11 +14,12 @@
     #right { width:28%; min-width:240px; background:#fff; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.06); padding:12px; box-sizing:border-box; }
     .muted { color:#6b7280; font-size:13px; }
     pre { background:#0b1220; color:#dbeafe; padding:8px; border-radius:6px; overflow:auto; max-height:240px; }
+    .error { color: #ff5555; }
   </style>
 </head>
 <body>
-  <!-- 1) standalone bundle (must load BEFORE our inline app) -->
-  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- 1) Use a specific version of lightweight-charts that we know works -->
+  <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
 
   <div id="root">
     <div id="left">
@@ -59,28 +60,25 @@
     const loadBtn = document.getElementById('loadBtn');
     const tvBtn = document.getElementById('tvBtn');
 
-    function log(msg){ logEl.textContent += '\n' + msg; logEl.scrollTop = 1e9; }
-    function setStatus(s){ statusEl.textContent = 'status: ' + s; }
-
-    // 1) find the factory: window.createChart (standalone) or window.LightweightCharts.createChart
-    const factory = window.LightweightCharts?.createChart || window.createChart;
-
-    if (!factory) {
-      setStatus('lightweight-charts not loaded');
-      log('ERROR: lightweight-charts standalone not available on window.');
-      return;
+    function log(msg, isError = false) { 
+      logEl.textContent += '\n' + msg; 
+      logEl.scrollTop = 1e9;
+      if (isError) {
+        logEl.classList.add('error');
+      }
     }
+    function setStatus(s) { statusEl.textContent = 'status: ' + s; }
 
     // --- chart state ---
     let chart = null;
     let candleSeries = null;
 
     // create or recreate chart
-    function createOrRecreateChart(themeDark=false) {
+    function createOrRecreateChart(themeDark = false) {
       try {
         if (chart) {
           // remove old chart
-          try { chart.remove(); } catch(e){ /* ignore */ }
+          try { chart.remove(); } catch(e) { log('Error removing chart: ' + e.message, true); }
           chart = null;
           candleSeries = null;
         }
@@ -92,7 +90,8 @@
           fontFamily: "Arial"
         };
 
-        chart = factory(chartDiv, {
+        // Create chart using the correct API
+        chart = LightweightCharts.createChart(chartDiv, {
           width: chartDiv.clientWidth,
           height: chartDiv.clientHeight,
           layout,
@@ -100,13 +99,12 @@
           timeScale: { borderVisible: false },
         });
 
-        // Check if chart was created successfully before trying to add series
-        if (!chart) {
-          throw new Error('Failed to create chart object');
+        // Check if chart was created successfully
+        if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+          throw new Error('Chart object is invalid or does not have addCandlestickSeries method');
         }
 
         // add candlestick series via API on the created chart object
-        // (standalone uses the global factory; API is the same)
         candleSeries = chart.addCandlestickSeries({
           upColor: '#26a69a',
           downColor: '#ef5350',
@@ -124,9 +122,10 @@
         });
 
         setStatus('chart created');
+        log('Chart created successfully');
       } catch (err) {
         setStatus('error creating chart');
-        log('createChart error: ' + (err && err.message ? err.message : String(err)));
+        log('createChart error: ' + (err && err.message ? err.message : String(err)), true);
         console.error(err);
       }
     }
@@ -138,7 +137,7 @@
     });
 
     // fetch candles from backend
-    async function fetchCandles(symbol, interval, limit=200) {
+    async function fetchCandles(symbol, interval, limit = 200) {
       // Replace this path with your backend endpoint if different
       const url = `/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
       setStatus('fetching ' + symbol + ' ' + interval);
@@ -152,7 +151,7 @@
         // if server response wrapper different, attempt to extract
         return data;
       } catch (err) {
-        log('fetch error: ' + err.message);
+        log('fetch error: ' + err.message, true);
         throw err;
       }
     }
@@ -195,6 +194,11 @@
     }
 
     async function loadAndRender() {
+      if (!candleSeries) {
+        log('Error: Candlestick series not initialized', true);
+        return;
+      }
+
       const symbol = symbolSel.value || 'XAUUSD';
       const interval = intervalSel.value || '5min';
       try {
@@ -222,7 +226,7 @@
         setStatus('rendered ' + symbol);
       } catch (err) {
         setStatus('render error');
-        log('render error: ' + (err && err.message ? err.message : String(err)));
+        log('render error: ' + (err && err.message ? err.message : String(err)), true);
         console.error(err);
       }
     }
@@ -235,10 +239,14 @@
     // attach load button
     loadBtn.addEventListener('click', loadAndRender);
 
-    // Wait for the library to fully load before creating the chart
+    // Initialize the app when the library is loaded
     function initializeApp() {
       // Check if the library is loaded
-      if (window.LightweightCharts || window.createChart) {
+      if (typeof LightweightCharts !== 'undefined' && 
+          typeof LightweightCharts.createChart === 'function') {
+        
+        log('LightweightCharts library loaded successfully');
+        
         // create chart initially
         createOrRecreateChart(false);
 
@@ -247,17 +255,19 @@
         
         // expose a global for debugging if needed
         window.__ICT_CHART = { chart, candleSeries, createOrRecreateChart, loadAndRender };
-
-        // sanity check: is factory available?
-        log('factory:' + (typeof factory === 'function' ? 'ok' : String(factory)));
       } else {
         // If not loaded yet, wait and try again
+        log('Waiting for LightweightCharts library to load...');
         setTimeout(initializeApp, 100);
       }
     }
 
-    // Initialize the app
-    initializeApp();
+    // Start initialization when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeApp);
+    } else {
+      initializeApp();
+    }
   })();
   </script>
 </body>

@@ -1,12 +1,10 @@
+cat > ./index.html <<'EOF'
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Astro ICT Chart Panel (TradingView)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="styles.css" />
-  <!-- TradingView JS -->
-  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <style>
     :root{--panel-bg:#f5f7fb;--light:#fff;--dark:#0b1220;}
     body{margin:0;font-family:Inter,Arial;background:var(--panel-bg);}
@@ -19,6 +17,7 @@
     .right{width:320px;display:flex;flex-direction:column;gap:12px}
     .panel{background:var(--light);border:1px solid #ddd;padding:12px;overflow:auto}
   </style>
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 </head>
 <body>
   <header>
@@ -65,40 +64,21 @@
   </div>
 
 <script>
-/*
-  TradingView widget embed:
-  - Uses the public tv.js widget (no special license) to show live charts for common symbols.
-  - symbolInput accepts: "AAPL" or "NASDAQ:AAPL" or "OANDA:XAUUSD" etc. If plain "AAPL" we will try "NASDAQ:AAPL".
-  - intervalSelect values: TradingView accepts numeric (minutes) or 'D'.
-*/
-
 let widget = null;
 let currentTheme = 'light';
-
-function log(msg){
-  const p = document.getElementById('log');
-  p.textContent = (new Date()).toLocaleTimeString() + ' — ' + msg + '\n' + p.textContent;
-}
-
+function log(msg){ const p=document.getElementById('log'); p.textContent=(new Date()).toLocaleTimeString()+' — '+msg+'\n'+p.textContent; }
 function normalizeSymbol(userSymbol){
-  // If user supplies XAUUSD or AAPL we'll try common prefixes
   if(!userSymbol) return 'XAUUSD';
-  // uppercase
   const s = userSymbol.trim().toUpperCase();
-  // if already has a colon assume okay
   if(s.indexOf(':') !== -1) return s;
-  // heuristics:
-  if(['XAUUSD','XAGUSD','EURUSD','GBPUSD','USDJPY'].includes(s)) return 'OANDA:' + s;
-  // assume equity on NASDAQ if alphabetic and <=5 chars
-  if(/^[A-Z]{1,5}$/.test(s)) return 'NASDAQ:' + s;
+  if(['XAUUSD','XAGUSD','EURUSD','GBPUSD','USDJPY'].includes(s)) return 'OANDA:'+s;
+  if(/^[A-Z]{1,5}$/.test(s)) return 'NASDAQ:'+s;
   return s;
 }
-
 function createTradingViewWidget(symbolRaw, interval){
   const symbol = normalizeSymbol(symbolRaw);
   const containerId = 'tv_chart';
   const theme = (currentTheme === 'dark') ? 'dark' : 'light';
-  // destroy old widget (TradingView doesn't expose destroy, so replace container)
   const parent = document.getElementById(containerId).parentNode;
   const old = document.getElementById(containerId);
   const newDiv = document.createElement('div');
@@ -106,9 +86,7 @@ function createTradingViewWidget(symbolRaw, interval){
   newDiv.style.height = '100%';
   newDiv.style.width = '100%';
   parent.replaceChild(newDiv, old);
-
   log('Creating TradingView widget: ' + symbol + ' @ ' + interval);
-
   widget = new TradingView.widget({
     "container_id": containerId,
     "width": "100%",
@@ -128,69 +106,27 @@ function createTradingViewWidget(symbolRaw, interval){
     "studies": ["MASimple@tv-basicstudies"],
     "locale": "en"
   });
-
-  // widget.onChartReady callback (widget returns object with onChartReady)
-  try{
-    widget.onChartReady(()=> {
-      log('TradingView chart ready: ' + symbol);
-      // set language or display additional info as needed
-    });
-  }catch(e){
-    // some versions may not return object; still log
-    log('widget created (no onChartReady handler available).');
-  }
+  try{ widget.onChartReady(()=> log('TradingView chart ready: ' + symbol)); }catch(e){ log('widget created'); }
 }
-
 document.addEventListener('DOMContentLoaded', () => {
-  const symbolInput = document.getElementById('symbolInput');
-  const intervalSelect = document.getElementById('intervalSelect');
-  const loadBtn = document.getElementById('loadBtn');
-  const themeBtn = document.getElementById('themeBtn');
-  const tvToggleBtn = document.getElementById('tvToggleBtn');
-  const fullscreenBtn = document.getElementById('fullscreenBtn');
-
-  // initial create
+  const symbolInput=document.getElementById('symbolInput');
+  const intervalSelect=document.getElementById('intervalSelect');
+  const loadBtn=document.getElementById('loadBtn');
+  const themeBtn=document.getElementById('themeBtn');
+  const tvToggleBtn=document.getElementById('tvToggleBtn');
+  const fullscreenBtn=document.getElementById('fullscreenBtn');
   createTradingViewWidget(symbolInput.value, intervalSelect.value);
-
-  loadBtn.addEventListener('click', ()=> {
-    createTradingViewWidget(symbolInput.value, intervalSelect.value);
-  });
-
-  intervalSelect.addEventListener('change', ()=> {
-    createTradingViewWidget(symbolInput.value, intervalSelect.value);
-  });
-
-  themeBtn.addEventListener('click', ()=>{
-    currentTheme = (currentTheme === 'dark') ? 'light' : 'dark';
-    themeBtn.textContent = (currentTheme === 'dark') ? 'Light' : 'Dark';
-    createTradingViewWidget(symbolInput.value, intervalSelect.value);
-  });
-
-  tvToggleBtn.addEventListener('click', ()=>{
-    const tv = document.getElementById('tv_chart');
-    tv.style.display = (tv.style.display === 'none') ? 'block' : 'none';
-  });
-
-  fullscreenBtn.addEventListener('click', ()=>{
-    const el = document.getElementById('tv_chart');
-    if (!document.fullscreenElement) {
-      el.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
-    }
-  });
-
-  // optional: poll backend health
-  setInterval(async () => {
-    try {
-      const resp = await fetch('/ict/health');
-      const j = await resp.json();
-      document.getElementById('backendStatus').textContent = j.status || JSON.stringify(j);
-    } catch(err){
-      document.getElementById('backendStatus').textContent = 'down';
-    }
+  loadBtn.addEventListener('click', ()=> createTradingViewWidget(symbolInput.value, intervalSelect.value));
+  intervalSelect.addEventListener('change', ()=> createTradingViewWidget(symbolInput.value, intervalSelect.value));
+  themeBtn.addEventListener('click', ()=> { currentTheme=(currentTheme==='dark')?'light':'dark'; themeBtn.textContent=(currentTheme==='dark')?'Light':'Dark'; createTradingViewWidget(symbolInput.value, intervalSelect.value); });
+  tvToggleBtn.addEventListener('click', ()=> { const tv=document.getElementById('tv_chart'); tv.style.display=(tv.style.display==='none')?'block':'none'; });
+  fullscreenBtn.addEventListener('click', ()=> { const el=document.getElementById('tv_chart'); if(!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.(); });
+  setInterval(async ()=> {
+    try { const resp = await fetch('/ict/health'); const j = await resp.json(); document.getElementById('backendStatus').textContent = j.status || JSON.stringify(j); } 
+    catch(err){ document.getElementById('backendStatus').textContent = 'down'; }
   }, 5000);
 });
 </script>
 </body>
 </html>
+EOF

@@ -1,45 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
   <title>Astro ICT Chart Panel</title>
-
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- ✅ TradingView Lightweight Charts (standalone build) -->
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-  <h1>Astro ICT Chart Panel</h1>
+  <h2>Astro ICT Chart Panel</h2>
 
-  <!-- Controls -->
   <div>
-    <input type="text" id="symbol" value="AAPL" placeholder="Symbol"/>
+    <input id="symbol" type="text" value="XAUUSD" />
     <select id="interval">
       <option value="1min">1m</option>
       <option value="5min">5m</option>
       <option value="15min">15m</option>
-      <option value="1h">1h</option>
-      <option value="1day">1d</option>
     </select>
-    <button onclick="recreateChart()">Load</button>
+    <button onclick="loadData()">Load</button>
   </div>
 
-  <!-- Chart container -->
-  <div id="chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
+  <div id="chart" style="width: 100%; height: 500px;"></div>
 
-  <!-- AI Mentor / Signals placeholders -->
-  <div style="margin-top:20px;">
-    <h3>AI Mentor</h3>
-    <p id="mentor">AI mentor demo text</p>
-    <button onclick="document.getElementById('mentor').innerText='Signals refreshed'">Refresh Mentor</button>
-
-    <h3>Signals</h3>
-    <button onclick="alert('Signals shown')">Show / Hide</button>
+  <div>
+    <button onclick="toggleDark()">Dark</button>
   </div>
 
-  <!-- ✅ App logic -->
+  <div id="status">Status: idle</div>
+
+  <!-- ✅ Correct Lightweight Charts build -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

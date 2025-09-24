@@ -1,7 +1,11 @@
 FROM nginx:stable-alpine
-# Copy our nginx config into container location
-COPY nginx.conf /etc/nginx/nginx.conf
-# Copy static public files (if present)
+
+# Drop our nginx conf into the container
+COPY conf.d/default.conf /etc/nginx/conf.d/default.conf
+
+# Copy static site (if you have one). Create frontend/public/index.html for quick testing
 COPY public /usr/share/nginx/html
+
 EXPOSE 80
+
 CMD ["nginx", "-g", "daemon off;"]

@@ -1,24 +1,13 @@
-version: "3.8"
-
 services:
   backend:
     build: ./backend
-    container_name: astro-ict-backend
+    container_name: astro-ict-charting-panel-backend-1
     ports:
-      - "3000:3000"
-    networks:
-      - astro-net
-
+      - "8000:8000"    # host:container
   frontend:
     build: ./frontend
-    container_name: astro-ict-frontend
+    container_name: astro-ict-charting-panel-frontend-1
     ports:
-      - "80:80"      # you can map to 8000 if you prefer (80 is standard)
+      - "3000:80"     # host port 3000 -> nginx (80)
     depends_on:
       - backend
-    networks:
-      - astro-net
-
-networks:
-  astro-net:
-    driver: bridge

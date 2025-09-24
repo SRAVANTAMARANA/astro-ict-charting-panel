@@ -1,28 +1,145 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Astro ICT - TradingView</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Astro ICT - TradingView Embed</title>
+
+  <!-- TradingView charting library -->
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-  <style>body,html{height:100%;margin:0}#tvchart{width:100%;height:100vh}</style>
+
+  <style>
+    html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f7fb}
+    .wrap{display:flex;flex-direction:column;height:100vh}
+    header{padding:10px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:8px}
+    #container{flex:1;display:flex;padding:12px;gap:12px}
+    #chartBox{flex:1;border:1px solid #ddd;background:#fff;min-height:420px;position:relative}
+    .controls input,.controls select{padding:6px;border-radius:4px;border:1px solid #ccc}
+    .controls button{padding:7px 10px;border-radius:4px;border:0;background:#0077ff;color:white;cursor:pointer}
+    .sidebar{width:320px;display:flex;flex-direction:column;gap:12px}
+    .panel{background:#fff;border:1px solid #ddd;padding:10px;min-height:120px}
+    .status{position:absolute;right:8px;top:8px;background:#fff;padding:6px;border-radius:4px;border:1px solid #eee}
+  </style>
 </head>
 <body>
-  <div id="tvchart"></div>
-  <script>
-    new TradingView.widget({
-      "width": "100%",
-      "height": "100%",
-      "symbol": "NASDAQ:AAPL",
-      "interval": "60",
-      "container_id": "tvchart",
-      "locale": "en",
-      "toolbar_bg": "#f1f3f6",
-      "enable_publishing": false,
-      "hide_side_toolbar": false,
-      "allow_symbol_change": true,
-      "studies": ["MACD@tv-basicstudies","RSI@tv-basicstudies"]
-    });
-  </script>
+  <div class="wrap">
+    <header>
+      <strong>Astro ICT Chart Panel</strong>
+      <div class="controls" style="margin-left:16px;">
+        <label>Symbol <input id="symbol" value="AAPL" /></label>
+        <label style="margin-left:8px">Interval
+          <select id="interval">
+            <option value="1">1</option><option value="5" selected>5</option>
+            <option value="15">15</option><option value="60">60</option><option value="D">D</option>
+          </select>
+        </label>
+        <button id="loadBtn" style="margin-left:8px">Load</button>
+        <button id="tvToggle" style="margin-left:6px">Toggle TV</button>
+      </div>
+    </header>
+
+    <div id="container">
+      <div id="chartBox">
+        <div id="tv_widget_container" style="width:100%;height:100%"></div>
+        <div class="status" id="status">idle</div>
+      </div>
+
+      <div class="sidebar">
+        <div class="panel">
+          <h4>Signals</h4>
+          <div id="signals">No signals yet</div>
+        </div>
+
+        <div class="panel">
+          <h4>Backend</h4>
+          <div id="backendStatus">not checked</div>
+          <button id="checkBackend" style="margin-top:8px">Check Backend</button>
+        </div>
+
+        <div class="panel">
+          <h4>Logs</h4>
+          <pre id="log" style="max-height:140px;overflow:auto;margin:0;padding:4px"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const tvContainer = document.getElementById('tv_widget_container');
+  const symbolInput = document.getElementById('symbol');
+  const intervalSelect = document.getElementById('interval');
+  const loadBtn = document.getElementById('loadBtn');
+  const tvToggle = document.getElementById('tvToggle');
+  const statusEl = document.getElementById('status');
+  const backendStatusEl = document.getElementById('backendStatus');
+  const logEl = document.getElementById('log');
+  const checkBackendBtn = document.getElementById('checkBackend');
+
+  let widget = null;
+  let tvVisible = true;
+
+  function log(msg){
+    logEl.textContent = (new Date()).toLocaleTimeString() + ' - ' + msg + '\n' + logEl.textContent;
+  }
+
+  function createTradingView(symbol, interval){
+    // Remove existing
+    tvContainer.innerHTML = '';
+    statusEl.textContent = 'loading...';
+    try{
+      widget = new TradingView.widget({
+        "width": "100%",
+        "height": "100%",
+        "symbol": symbol.includes(':') ? symbol : "NASDAQ:" + symbol,
+        "interval": interval,
+        "timezone": "Etc/UTC",
+        "theme": "light",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f1f3f6",
+        "enable_publishing": false,
+        "hide_side_toolbar": false,
+        "allow_symbol_change": true,
+        "container_id": "tv_widget_container"
+      });
+      statusEl.textContent = 'ready';
+      log(`Loaded TV widget ${symbol} ${interval}`);
+    } catch(e){
+      console.error('TV widget error', e);
+      statusEl.textContent = 'widget error';
+      log('TV widget error: ' + e.message);
+    }
+  }
+
+  loadBtn.addEventListener('click', () => {
+    const sym = symbolInput.value.trim() || 'AAPL';
+    const i = intervalSelect.value;
+    createTradingView(sym, i);
+  });
+
+  tvToggle.addEventListener('click', () => {
+    tvVisible = !tvVisible;
+    document.getElementById('chartBox').style.display = tvVisible ? 'block' : 'none';
+  });
+
+  checkBackendBtn.addEventListener('click', async () => {
+    try{
+      const r = await fetch('/ict/health');
+      if(!r.ok) throw new Error('status ' + r.status);
+      const j = await r.json();
+      backendStatusEl.textContent = JSON.stringify(j);
+      log('Backend OK');
+    } catch(e){
+      backendStatusEl.textContent = 'error: ' + e.message;
+      log('Backend check failed: ' + e.message);
+    }
+  });
+
+  // initial
+  document.addEventListener('DOMContentLoaded', () => {
+    createTradingView(symbolInput.value.trim() || 'AAPL', intervalSelect.value);
+  });
+
+</script>
 </body>
 </html>

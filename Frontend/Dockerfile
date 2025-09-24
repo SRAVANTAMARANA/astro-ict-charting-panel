@@ -1,7 +1,7 @@
-FROM nginx:1.28-alpine
-# Remove default conf and add our nginx.conf
+FROM nginx:stable-alpine
+# Copy our nginx config into container location
 COPY nginx.conf /etc/nginx/nginx.conf
-# Copy any static site files if you have them (public/)
+# Copy static public files (if present)
 COPY public /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

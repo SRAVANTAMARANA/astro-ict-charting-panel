@@ -1,10 +1,10 @@
 services:
   frontend:
-    build: ./frontend   # or image: ...
+    image: your-frontend-image-or-build
     ports:
-      - "3000:80"
+      - "3000:80"         # host_port:container_port (adjust as you currently use)
     volumes:
       - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./frontend/static/:/usr/share/nginx/html/:ro
+      - ./frontend/static/:/usr/share/nginx/html/:ro   # if you serve static
     depends_on:
       - backend

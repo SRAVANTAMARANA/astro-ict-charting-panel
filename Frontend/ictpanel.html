@@ -1,154 +1,125 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Astro ICT Chart Panel</title>
 
-  <!-- Lightweight Charts (standalone UMD bundle) -->
+  <!-- Lightweight Charts UMD bundle (required) -->
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
   <style>
-    :root{
-      --primary: #1a73e8;
-      --panel-bg: #f5f7fb;
-      --light: #ffffff;
-    }
-    html,body{height:100%;margin:0;font-family:Inter, Arial, sans-serif;background:var(--panel-bg);}
-    .app{display:flex;flex-direction:column;height:100vh;}
-    header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border-bottom:1px solid #ddd;}
-    header h1{font-size:18px;margin:0}
-    .controls{display:flex;gap:8px;align-items:center}
-    button{padding:6px 10px;border-radius:4px;background:var(--primary);color:#fff;border:none;cursor:pointer}
-    button.secondary{background:#eee;color:#111;border:1px solid #ccc}
-    .main{display:flex;flex:1;gap:12px;padding:12px}
-    .left{flex:1;display:flex;flex-direction:column;gap:12px}
-    #chart{flex:1;min-height:380px;border:1px solid #ddd;background:var(--light)}
-    .panel{background:var(--light);border:1px solid #ddd;padding:12px;height:300px;overflow:auto}
-    .right{width:300px;display:flex;flex-direction:column;gap:12px}
-    #log{font-size:12px;max-height:200px;overflow:auto}
-    input, select {padding:6px;border:1px solid #ccc;border-radius:4px}
+    html,body{height:100%;margin:0;font-family:Arial, Helvetica, sans-serif;background:#f5f7fb}
+    .header{display:flex;align-items:center;gap:8px;padding:10px;background:#fff;border-bottom:1px solid #ddd}
+    .controls input, .controls select{padding:6px}
+    #chart{height:520px;width:100%;background:#fff;border:1px solid #ddd}
+    .right{padding:12px}
+    #log{height:160px;overflow:auto;background:#fff;border:1px solid #ddd;padding:8px;font-size:12px}
+    .button{padding:6px 10px;border-radius:4px;background:#0b84ff;color:#fff;border:none;cursor:pointer}
   </style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <h1>Astro ICT Chart Panel</h1>
-      <div class="controls">
-        <label>Symbol:
-          <input id="symbolInput" value="XAUUSD" style="padding:6px;margin-left:6px" />
-        </label>
-        <select id="intervalSelect" style="padding:6px">
-          <option value="1min">1m</option>
-          <option value="5min" selected>5m</option>
-          <option value="15min">15m</option>
-          <option value="60min">1h</option>
-          <option value="1day">1d</option>
-        </select>
-        <button id="loadBtn">Load</button>
-      </div>
-    </header>
+  <div class="header">
+    <div class="controls">
+      Symbol: <input id="symbol" value="AAPL" />
+      Interval:
+      <select id="interval">
+        <option value="1min">1min</option>
+        <option value="5min" selected>5min</option>
+        <option value="15min">15min</option>
+        <option value="1h">1h</option>
+        <option value="1d">1d</option>
+      </select>
+      <button id="load" class="button">Load</button>
+      <span id="status" style="margin-left:12px">status: idle</span>
+    </div>
+  </div>
 
-    <div class="main">
-      <div class="left">
-        <div id="chart"></div>
-        <div class="panel">
-          <h3>Signals</h3>
-          <div id="signals">No signals yet</div>
-        </div>
-      </div>
-      <div class="right">
-        <div class="panel">
-          <h3>Backend Status</h3>
-          <div id="backendStatus">idle</div>
-        </div>
-        <div class="panel">
-          <h3>Logs</h3>
-          <div id="log"></div>
-        </div>
-      </div>
+  <div style="display:flex;gap:12px;padding:12px">
+    <div style="flex:1">
+      <div id="chart"></div>
+    </div>
+    <div style="width:360px" class="right">
+      <h4>Logs</h4>
+      <div id="log">open logs...</div>
     </div>
   </div>
 
   <script>
+    // config
     const API_BASE = (window.API_BASE || 'http://localhost:8000');
-    const POLL_INTERVAL_MS = 5000;
+    const LOG = document.getElementById('log');
+    function log(msg){ console.log(msg); LOG.innerText = (new Date()).toLocaleTimeString() + ' - ' + msg + '\n' + LOG.innerText; }
 
-    let chart, candleSeries, pollTimer;
-
-    const logEl = document.getElementById('log');
-    const backendStatus = document.getElementById('backendStatus');
-
-    function log(msg) {
-      logEl.textContent = new Date().toLocaleTimeString() + " — " + msg + "\n" + logEl.textContent;
+    // create chart
+    const chartDiv = document.getElementById('chart');
+    const createChart = window.LightweightCharts && window.LightweightCharts.createChart;
+    if (!createChart) {
+      log('ERROR: LightweightCharts.createChart not found. Check inclusion of the library.');
+      document.getElementById('status').innerText = 'status: chart lib missing';
+      throw new Error('lightweight-charts missing');
     }
 
-    function initChart() {
-      if (chart) chart.remove();
-      chart = LightweightCharts.createChart(document.getElementById('chart'), {
-        width: document.getElementById('chart').clientWidth,
-        height: 420,
-        layout: { background: { color: '#fff' }, textColor: '#000' }
-      });
-      candleSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a',
-        downColor: '#ef5350',
-        borderVisible: true,
-        wickUpColor: '#26a69a',
-        wickDownColor: '#ef5350'
-      });
-      window.addEventListener('resize', () => {
-        chart.applyOptions({ width: document.getElementById('chart').clientWidth });
-      });
-    }
+    const chart = createChart(chartDiv, { width: chartDiv.clientWidth, height: 520, layout: { background: { color: '#ffffff'}, textColor: '#333' } });
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#26a69a', downColor: '#ef5350', borderVisible: true, wickUpColor:'#26a69a', wickDownColor:'#ef5350'
+    });
 
-    async function checkBackend() {
+    // resize handling
+    window.addEventListener('resize', ()=> {
       try {
-        const res = await fetch(API_BASE + '/ict/health');
-        if (!res.ok) throw new Error(res.status);
-        const j = await res.json();
-        backendStatus.textContent = 'ok — ' + (j.time || '');
-      } catch (err) {
-        backendStatus.textContent = 'error: ' + err.message;
-      }
+        chart.applyOptions({ width: chartDiv.clientWidth, height: 520 });
+      } catch(e){ /* ignore */ }
+    });
+
+    // helper to convert backend times to lightweight format
+    function normalizeCandles(raw) {
+      // Accept ISO string time or epoch seconds depending on backend
+      return raw.map(c => ({
+        time: c.time, // backend already returns ISO strings in your API responses
+        open: +c.open, high: +c.high, low: +c.low, close: +c.close, volume: c.volume
+      }));
     }
 
-    async function fetchCandles(symbol, interval) {
+    async function fetchCandles(symbol, interval, limit=200) {
+      const url = `${API_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+      log('fetching ' + url);
+      document.getElementById('status').innerText = 'status: fetching...';
       try {
-        const url = `${API_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=200`;
         const res = await fetch(url);
-        if (!res.ok) throw new Error('server ' + res.status);
+        if (!res.ok) {
+          const text = await res.text().catch(()=>'<no body>');
+          log('fetch failed code=' + res.status + ' body=' + text);
+          document.getElementById('status').innerText = 'status: fetch error ' + res.status;
+          return;
+        }
         const j = await res.json();
-        if (!j || !Array.isArray(j.candles)) throw new Error('invalid payload');
-        const data = j.candles.map(c => ({
-          time: c.time,
-          open: +c.open,
-          high: +c.high,
-          low: +c.low,
-          close: +c.close
-        }));
+        if (!j || !Array.isArray(j.candles)) {
+          log('Invalid payload from backend: ' + JSON.stringify(j).slice(0,300));
+          document.getElementById('status').innerText = 'status: invalid payload';
+          return;
+        }
+
+        const data = normalizeCandles(j.candles);
         candleSeries.setData(data);
-        try { chart.timeScale().fitContent(); } catch(e){}
+        try { chart.timeScale().fitContent(); } catch(e){ /* ignore */ }
+        document.getElementById('status').innerText = `status: loaded ${data.length} candles`;
         log(`Loaded ${data.length} candles for ${symbol} ${interval}`);
       } catch (err) {
-        log("Fetch error: " + err.message);
+        log('Fetch error: ' + (err && err.message));
+        document.getElementById('status').innerText = 'status: fetch exception';
       }
     }
 
-    function loadSymbol() {
-      const symbol = document.getElementById('symbolInput').value || 'XAUUSD';
-      const interval = document.getElementById('intervalSelect').value || '5min';
-      if (pollTimer) clearInterval(pollTimer);
-      fetchCandles(symbol, interval);
-      pollTimer = setInterval(() => fetchCandles(symbol, interval), POLL_INTERVAL_MS);
-      checkBackend();
-    }
-
-    document.getElementById('loadBtn').addEventListener('click', loadSymbol);
-    window.addEventListener('load', () => {
-      initChart();
-      loadSymbol();
+    // UI
+    document.getElementById('load').addEventListener('click', ()=> {
+      const sym = document.getElementById('symbol').value || 'AAPL';
+      const intv = document.getElementById('interval').value || '1min';
+      fetchCandles(sym, intv);
     });
+
+    // load demo on open
+    fetchCandles(document.getElementById('symbol').value, document.getElementById('interval').value);
   </script>
 </body>
 </html>

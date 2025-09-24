@@ -1,3 +1,6 @@
+# frontend/Dockerfile
 FROM nginx:stable-alpine
-COPY ./ictpanel.html /usr/share/nginx/html/index.html
-# Serve static file on port 80 (mapped to host:3000 in docker-compose)
+# Remove default nginx index to be safe and copy our static app
+RUN rm -f /usr/share/nginx/html/*
+COPY . /usr/share/nginx/html
+# keep default nginx.conf from image; static files served out of /usr/share/nginx/html

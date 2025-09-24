@@ -1,78 +1,11 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>ICT Charting Panel - demo</title>
-  <style>
-    body { font-family: Arial, sans-serif; }
-    #chart { width: 900px; height: 400px; margin: 20px; }
-  </style>
+  <meta charset="utf-8">
+  <title>Charting Panel Frontend</title>
 </head>
 <body>
-  <h1>Astro ICT Chart (Demo)</h1>
-  <div>
-    <label>Symbol: <input id="symbol" value="AAPL"></label>
-    <label>Interval:
-      <select id="interval">
-        <option value="1min">1min</option>
-        <option value="5min">5min</option>
-        <option value="1h">1h</option>
-      </select>
-    </label>
-    <button id="load">Load</button>
-  </div>
-
-  <div id="status">Status: idle</div>
-  <div id="chart"></div>
-
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-  <script>
-    const statusEl = document.getElementById('status');
-    const chartEl = document.getElementById('chart');
-    const chart = LightweightCharts.createChart(chartEl, { width: 900, height: 400 });
-    const candleSeries = chart.addCandlestickSeries();
-
-    async function loadData(symbol, interval) {
-      statusEl.textContent = 'Status: loading...';
-      try {
-        const url = `/ict/time_series?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const body = await res.json();
-        // If proxied real TwelveData, the format may vary. For demo we expect either 'data' or 'values'
-        const values = body.data || body.values || [];
-        // Transform to lightweight-charts format if needed
-        const series = values.map(v => {
-          // sample fallback fields
-          if (v.datetime) {
-            return {
-              time: v.datetime,
-              open: Number(v.open),
-              high: Number(v.high),
-              low: Number(v.low),
-              close: Number(v.close)
-            };
-          }
-          // twelve data sometimes uses 'datetime' or 'datetime' fine.
-          return null;
-        }).filter(Boolean);
-        if (!series.length) {
-          statusEl.textContent = 'Status: no series returned (showing demo candle)';
-          candleSeries.setData([{ time: (new Date()).toISOString(), open: 100, high: 102, low: 99, close: 101 }]);
-          return;
-        }
-        candleSeries.setData(series.reverse()); // reverse if server returns newest-first
-        statusEl.textContent = 'Status: done';
-      } catch (err) {
-        statusEl.textContent = 'Status: error: ' + err.message;
-      }
-    }
-
-    document.getElementById('load').addEventListener('click', () => {
-      const symbol = document.getElementById('symbol').value;
-      const interval = document.getElementById('interval').value;
-      loadData(symbol, interval);
-    });
-  </script>
+  <h1>Frontend Static page</h1>
+  <p>Use /ict/* endpoints proxied to backend.</p>
 </body>
 </html>

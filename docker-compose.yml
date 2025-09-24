@@ -1,10 +1,23 @@
+version: "3.8"
+
 services:
-  frontend:
-    build: ./frontend   # or image: ...
+  backend:
+    build: ./backend
+    container_name: ict_backend
     ports:
-      - "3000:80"
-    volumes:
-      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./frontend/static:/usr/share/nginx/html:ro   # if you serve static files
+      - "8000:8000"      # host:container (optional for direct host tests)
+    environment:
+      - PORT=8000
+      - TWELVE_API_KEY=${TWELVE_API_KEY:-}   # optionally set in your .env or environment
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: ict_frontend
+    ports:
+      - "3000:80"        # 3000 on host -> nginx inside container
     depends_on:
       - backend
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro   # ensure nginx uses your host config
+    restart: always

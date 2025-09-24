@@ -1,205 +1,241 @@
-/* frontend script with WS, interact.js for drag/resize, lightweight charts and TV toggle */
-const backendBase = (location.hostname === 'localhost') ? 'http://localhost:8000' : `${location.origin}/backend`;
-const chartDiv = document.getElementById('chart');
-let chart = null, candleSeries = null, themeDark = false, ws=null;
+// app.js - frontend logic using LightweightCharts standalone build
+// Assumes: lightweight-charts standalone script is loaded and exposes `LightweightCharts` global
 
-function applyTheme(){ document.documentElement.classList.toggle('dark', themeDark); }
-document.getElementById('themeToggle').addEventListener('change', (e)=>{ themeDark=e.target.checked; applyTheme(); recreateChart(); });
+(function () {
+  // DOM elements
+  const chartDiv = document.getElementById('chart');
+  const symbolInput = document.getElementById('symbol');
+  const intervalSelect = document.getElementById('interval');
+  const loadBtn = document.getElementById('loadBtn');
+  const recreateBtn = document.getElementById('recreateBtn');
+  const autoBtn = document.getElementById('autoBtn');
+  const logEl = document.getElementById('log');
+  const backendHealthEl = document.getElementById('backendHealth');
+  const healthStatus = document.getElementById('healthStatus');
+  const checkHealthBtn = document.getElementById('checkHealth');
+  const testApiBtn = document.getElementById('testApi');
 
-function recreateChart(){
-  if(chart) chart.remove();
-  chart = LightweightCharts.createChart(chartDiv, {
-    width: chartDiv.clientWidth,
-    height: chartDiv.clientHeight,
-    layout: { background: { color: themeDark? '#0b1220':'#ffffff' }, textColor: themeDark? '#dbeafe':'#333' },
-    rightPriceScale: { borderVisible:false }, timeScale:{ borderVisible:false }
-  });
-  candleSeries = chart.addCandlestickSeries();
-  chart.timeScale().subscribeVisibleTimeRangeChange(updateStats);
-}
-window.addEventListener('resize', ()=>{ if(chart) chart.applyOptions({width:chartDiv.clientWidth, height:chartDiv.clientHeight}); });
-recreateChart();
+  // Chart variables
+  let chart = null;
+  let candleSeries = null;
+  let autoTimer = null;
+  let autoOn = false;
 
-async function loadCandles(){
-  const symbol=document.getElementById('symbol').value||'XAUUSD';
-  const interval=document.getElementById('interval').value||'1min';
-  setStatus('loading...');
-  try{
-    const res=await fetch(`${backendBase}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=400`);
-    const payload=await res.json();
-    if(!payload||!payload.candles) throw new Error('no candles');
-    const data=payload.candles.map(c=>({ time: convertTime(c.time), open:c.open, high:c.high, low:c.low, close:c.close }));
-    candleSeries.setData(data);
-    setStatus('OK');
-    updateStats();
-    loadSignals(symbol);
-    connectWS(); // ensure websocket connected
-  }catch(e){
-    console.error(e); setStatus('error '+(e.message||e)); candleSeries.setData([]); updateStats();
+  // Backend config - adjust if your backend serves from different prefix/port
+  const BACKEND_BASE = ''; // empty means same origin. If using /api prefix or different port set here (e.g. 'http://localhost:8000')
+  // Endpoint paths used by your project
+  const CANDLES_ENDPOINT = (s, i) => `${BACKEND_BASE}/ict/candles?symbol=${encodeURIComponent(s)}&interval=${encodeURIComponent(i)}&limit=200`;
+  const HEALTH_ENDPOINT = `${BACKEND_BASE}/ict/health`;
+
+  // logging helpers
+  function log(...args) {
+    console.log(...args);
+    const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    logEl.textContent = `${new Date().toISOString()}  ${line}\n` + logEl.textContent;
   }
-}
-function convertTime(t){ try{ if(typeof t==='string' && t.includes('T')) return t; return (new Date(t)).toISOString(); }catch{ return t; } }
 
-function setStatus(s){ document.getElementById('statusText').innerText = s; }
-
-function updateStats(){
-  if(!chart || !candleSeries) return;
-  const vr = chart.timeScale().getVisibleRange();
-  if(!vr){ setStats('-','-','-'); return; }
-  const symbol=document.getElementById('symbol').value||'XAUUSD';
-  fetch(`${backendBase}/ict/candles?symbol=${symbol}&interval=${document.getElementById('interval').value}&limit=1000`)
-    .then(r=>r.json()).then(payload=>{
-      const arr=(payload.candles||[]).map(x=>({t:convertTime(x.time),low:x.low,high:x.high,close:x.close}));
-      const filtered = arr.filter(x=> x.t>=vr.from && x.t<=vr.to);
-      if(!filtered.length){ const last=arr.slice(-1)[0]; setStats('-','-',(last? last.close:'-')); return; }
-      const lows = filtered.map(x=>x.low), highs=filtered.map(x=>x.high);
-      setStats(Math.min(...lows), Math.max(...highs), filtered[filtered.length-1].close);
-    }).catch(()=>setStats('-','-','-'));
-}
-function setStats(min,max,close){ document.getElementById('minVal').innerText=min; document.getElementById('maxVal').innerText=max; document.getElementById('closeVal').innerText=close; }
-
-async function loadSignals(symbol){
-  try{
-    const res=await fetch(`${backendBase}/ict/signals?symbol=${encodeURIComponent(symbol)}`);
-    const json=await res.json();
-    const list=document.getElementById('signalsList'); list.innerHTML='';
-    (json.signals||[]).forEach(s=>{
-      const el=document.createElement('div'); el.textContent=`${s.time} | ${s.type.toUpperCase()} @ ${s.price} ${s.note||''}`;
-      list.appendChild(el);
-      const marker = chart.addLineSeries({ color: s.type==='buy'?'#2ecc71':'#e74c3c', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed });
-      marker.setData([{ time: convertTime(s.time), value: s.price }]);
-      setTimeout(()=>marker.remove(), 1000*60*30);
-    });
-  }catch(e){ console.warn('signals', e); }
-}
-document.getElementById('toggleSignals').addEventListener('click', ()=> {
-  const el=document.getElementById('signalsList'); el.style.display = el.style.display==='none'? 'block' : 'none';
-});
-
-// add signal (protected) -> opens prompt for token
-async function addSignalPrompt(){
-  const symbol = document.getElementById('symbol').value||'XAUUSD';
-  const price = prompt("Price for signal:");
-  const type = prompt("Type (buy/sell):","buy");
-  const token = prompt("API token (protected):");
-  if(!price || !type) return;
-  try{
-    const res = await fetch(`${backendBase}/ict/signals/add?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(token)}`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ time:new Date().toISOString(), type:type, price: parseFloat(price), note:'manual' })
-    });
-    const json = await res.json();
-    console.log('add signal',json);
-    loadSignals(symbol);
-  }catch(e){ alert('error: '+e.message); }
-}
-
-// small UI actions
-document.getElementById('refreshMentor').addEventListener('click', ()=> document.getElementById('mentorText').innerText="AI mentor updated "+new Date().toLocaleTimeString());
-document.getElementById('loadBtn').addEventListener('click', loadCandles);
-document.getElementById('fullscreenBtn').addEventListener('click', ()=> { if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); });
-
-// TradingView widget toggle + simple layout save
-const tvWidget = document.getElementById('tvWidget');
-document.getElementById('tvBtn').addEventListener('click', ()=>{
-  if(tvWidget.classList.contains('hidden')){
-    const container = document.getElementById('tradingview_container');
-    container.innerHTML = '';
-    const symbol = document.getElementById('symbol').value || 'XAUUSD';
-    const script = document.createElement('script');
-    script.src = "https://s3.tradingview.com/tv.js";
-    script.onload = ()=> {
-      new TradingView.widget({
-        "autosize": true,
-        "symbol": symbol,
-        "interval": "60",
-        "timezone": "Etc/UTC",
-        "theme": themeDark? "dark" : "light",
-        "style": "1",
-        "locale": "en",
-        "toolbar_bg": "#f1f3f6",
-        "enable_publishing": false,
-        "allow_symbol_change": true,
-        "container_id": "tradingview_container"
-      });
-    };
-    container.appendChild(script);
-    tvWidget.classList.remove('hidden');
-    localStorage.setItem('chartMode','tv');
-  } else {
-    tvWidget.classList.add('hidden');
-    document.getElementById('tradingview_container').innerHTML = '';
-    localStorage.setItem('chartMode','light');
+  function setBackendHealth(statusText, ok = true) {
+    backendHealthEl.textContent = statusText;
+    backendHealthEl.style.color = ok ? 'green' : 'red';
+    healthStatus.textContent = ok ? 'ok' : 'error';
+    healthStatus.style.color = ok ? 'green' : 'red';
   }
-});
-document.getElementById('tvClose').addEventListener('click', ()=> tvWidget.classList.add('hidden'));
 
-// WebSocket real-time signals
-function connectWS(){
-  if(ws && ws.readyState === WebSocket.OPEN) return;
-  try{
-    ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.hostname + ':8000/ws/signals');
-    ws.onopen = ()=> console.log('WS open');
-    ws.onmessage = (m) => {
-      try{
-        const data = JSON.parse(m.data);
-        if(data.type === 'signal'){
-          const symbol=document.getElementById('symbol').value||'XAUUSD';
-          if(data.symbol === symbol){
-            // show in UI
-            const list=document.getElementById('signalsList');
-            const el=document.createElement('div'); el.textContent=`(ws) ${data.signal.time} | ${data.signal.type.toUpperCase()} @ ${data.signal.price} ${data.signal.note||''}`;
-            list.prepend(el);
-            // draw marker
-            const marker = chart.addLineSeries({ color: data.signal.type==='buy'?'#2ecc71':'#e74c3c', lineWidth: 1 });
-            marker.setData([{ time: convertTime(data.signal.time), value: data.signal.price }]);
-            setTimeout(()=>marker.remove(), 1000*60*30);
+  // Chart creation using global LightweightCharts (standalone)
+  function recreateChart() {
+    // destroy previous
+    if (chart) {
+      try { chart.remove(); } catch (e) { /* ignore */ }
+      chart = null;
+      candleSeries = null;
+    }
+
+    // ensure the global exists
+    if (typeof LightweightCharts === 'undefined') {
+      log('LightweightCharts global not found. Make sure the standalone script is loaded.');
+      return;
+    }
+
+    // create chart
+    chart = LightweightCharts.createChart(chartDiv, {
+      width: chartDiv.clientWidth,
+      height: chartDiv.clientHeight,
+      layout: {
+        background: { color: '#ffffff' },
+        textColor: '#333'
+      },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false }
+    });
+
+    // add candlestick series
+    candleSeries = chart.addCandlestickSeries({
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderVisible: true,
+      wickVisible: true
+    });
+
+    // handle responsive
+    window.addEventListener('resize', () => {
+      if (!chart) return;
+      chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
+    });
+
+    log('Chart recreated.');
+  }
+
+  // convert backend candle items to LightweightCharts format
+  function mapCandlesToLW(dataArray) {
+    // expects each item {datetime, open, high, low, close, volume}
+    return dataArray.map(item => {
+      // Lightweight accepts ISO (yyyy-mm-ddTHH:MM:SSZ) or timestamp in seconds; we pass the ISO directly
+      return {
+        time: item.datetime || item.time || item.date || item.t, // check multiple field names
+        open: Number(item.open),
+        high: Number(item.high),
+        low: Number(item.low),
+        close: Number(item.close),
+        volume: item.volume !== undefined ? Number(item.volume) : undefined
+      };
+    }).filter(Boolean);
+  }
+
+  // load candles from backend and populate chart
+  async function loadCandles(symbol, interval) {
+    if (!symbol) {
+      log('Symbol is empty.');
+      return;
+    }
+
+    try {
+      if (!chart || !candleSeries) {
+        recreateChart();
+      }
+
+      const url = CANDLES_ENDPOINT(symbol, interval);
+      log('Fetching candles from', url);
+      const res = await fetch(url, { cache: 'no-store' });
+
+      if (!res.ok) {
+        const text = await res.text();
+        log('Candles request failed', res.status, text);
+        setBackendHealth(`candles ${res.status}`, false);
+        return;
+      }
+
+      const payload = await res.json();
+      // payload could either be {meta:..., data: [...]} or just an array
+      let array = [];
+      if (Array.isArray(payload)) {
+        array = payload;
+      } else if (payload && Array.isArray(payload.data)) {
+        array = payload.data;
+      } else if (payload && Array.isArray(payload.candles)) {
+        array = payload.candles;
+      } else if (payload && payload.meta && payload.values) {
+        // some formats: values array
+        array = payload.values;
+      } else {
+        // maybe the backend returned single object or wrapper
+        log('Unexpected candles payload shape:', payload);
+        // try to find a first array within object
+        for (const k in payload) {
+          if (Array.isArray(payload[k])) {
+            array = payload[k];
+            break;
           }
         }
-      }catch(e){ console.warn('ws parse', e); }
-    };
-    ws.onclose = ()=> { console.log('WS closed, reconnect in 3s'); setTimeout(connectWS,3000); };
-    ws.onerror = (e) => { console.warn('WS err', e); ws.close(); };
-  }catch(e){ console.warn('ws connect error', e); }
-}
+      }
 
-loadCandles();
-applyTheme();
+      const mapped = mapCandlesToLW(array);
+      if (!mapped.length) {
+        log('No candle data returned from backend.');
+        setBackendHealth('no-data', false);
+        return;
+      }
 
-// interact.js for drag & resize
-interact('[data-resizable]').draggable({ inertia:true, modifiers:[interact.modifiers.restrict({restriction:'parent',endOnly:true})], listeners:{
-  start (event) {},
-  move (event) {
-    const target = event.target;
-    const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-    const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-    target.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
-    target.setAttribute('data-x', x);
-    target.setAttribute('data-y', y);
-  },
-  end (event) {}
-}}).resizable({
-  edges: { left:true, right:true, bottom:true, top:true },
-  listeners: {
-    move (event) {
-      let { x, y } = event.target.dataset;
-      x = (parseFloat(x) || 0);
-      y = (parseFloat(y) || 0);
-      // update size
-      event.target.style.width  = event.rect.width + 'px';
-      event.target.style.height = event.rect.height + 'px';
-      // translate when resizing from top or left
-      x += event.deltaRect.left;
-      y += event.deltaRect.top;
-      event.target.style.transform = 'translate(' + x + 'px,' + y + 'px)';
-      event.target.dataset.x = x;
-      event.target.dataset.y = y;
-      // if chartPanel resized, update chart
-      if(event.target.id === 'chartPanel' && chart) setTimeout(()=>chart.applyOptions({width: chartDiv.clientWidth, height: chartDiv.clientHeight}),50);
+      candleSeries.setData(mapped);
+      chart.timeScale().fitContent();
+      setBackendHealth('ok', true);
+      log(`Loaded ${mapped.length} candles for ${symbol} ${interval}`);
+    } catch (err) {
+      log('Error loading candles:', err);
+      setBackendHealth('error', false);
     }
-  },
-  inertia: true
-});
+  }
 
-// double click to add sample signal (protected) -> prompts for token
-chartDiv.addEventListener('dblclick', addSignalPrompt);
+  // health check
+  async function checkHealth() {
+    try {
+      const r = await fetch(HEALTH_ENDPOINT, { cache: 'no-store' });
+      if (r.ok) {
+        const txt = await r.text();
+        setBackendHealth('ok', true);
+        log('Health OK:', txt);
+      } else {
+        setBackendHealth(`err ${r.status}`, false);
+        log('Health fetch failed', r.status);
+      }
+    } catch (e) {
+      setBackendHealth('offline', false);
+      log('Health request error', e);
+    }
+  }
+
+  // event wiring
+  loadBtn.addEventListener('click', () => {
+    const symbol = symbolInput.value.trim();
+    const interval = intervalSelect.value;
+    loadCandles(symbol, interval);
+  });
+
+  recreateBtn.addEventListener('click', () => recreateChart());
+
+  checkHealthBtn.addEventListener('click', () => checkHealth());
+
+  testApiBtn.addEventListener('click', async () => {
+    const s = symbolInput.value.trim();
+    const i = intervalSelect.value;
+    const url = CANDLES_ENDPOINT(s, i);
+    log('Testing API URL:', url);
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      const text = await r.text();
+      log('API test response', r.status, text.slice ? text.slice(0, 2000) : text);
+    } catch (e) {
+      log('API test error:', e);
+    }
+  });
+
+  autoBtn.addEventListener('click', () => {
+    autoOn = !autoOn;
+    autoBtn.textContent = `Auto: ${autoOn ? 'ON' : 'OFF'}`;
+    if (autoOn) {
+      // every 15s
+      if (autoTimer) clearInterval(autoTimer);
+      autoTimer = setInterval(() => {
+        const s = symbolInput.value.trim();
+        const i = intervalSelect.value;
+        loadCandles(s, i);
+      }, 15000);
+      // run immediately
+      loadBtn.click();
+    } else {
+      if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    }
+  });
+
+  // initial setup
+  (function init() {
+    recreateChart();
+    // pre-load example
+    const initialSymbol = symbolInput.value.trim() || 'AAPL';
+    const initialInterval = intervalSelect.value;
+    // check backend
+    checkHealth();
+    // small delay then load
+    setTimeout(() => loadCandles(initialSymbol, initialInterval), 400);
+  })();
+
+})();

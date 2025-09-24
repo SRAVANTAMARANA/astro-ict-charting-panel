@@ -1,73 +1,45 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Astro ICT Chart Panel</title>
 
-  <!-- Basic styling -->
-  <style>
-    html,body { height:100%; margin:0; font-family: Arial, Helvetica, sans-serif; background:#f6f7fb; }
-    #root { display:flex; height:100vh; gap:12px; padding:12px; box-sizing:border-box; }
-    .left { width: 78%; display:flex; flex-direction:column; gap:8px; }
-    .right { width: 22%; min-width:220px; background:#fff; border-radius:6px; padding:10px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
-    .panel { background:#fff; border-radius:6px; padding:8px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
-    #chart { flex:1; min-height:420px; border-radius:6px; overflow:hidden; background:#fff; }
-    .controls { display:flex; gap:8px; align-items:center; padding:8px 0; }
-    input, select, button { padding:6px 8px; border-radius:4px; border:1px solid #ddd; font-size:14px; }
-    button { cursor:pointer; background:#1976d2; color:#fff; border: none; }
-    .status { font-size:13px; color:#444; margin-top:6px; }
-    .log { margin-top:8px; font-family:monospace; font-size:12px; color:#444; max-height:240px; overflow:auto; background:#fafafa; padding:8px; border-radius:4px; border:1px dashed #eee; }
-    .small { font-size:12px; color:#666; }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 
-  <!-- Lightweight Charts standalone build (exposes global LightweightCharts) -->
+  <!-- ✅ TradingView Lightweight Charts (standalone build) -->
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-  <div id="root">
-    <div class="left">
-      <div class="panel">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 style="margin:0">Astro ICT Chart Panel</h3>
-          <div class="small">Status: <span id="healthStatus">unknown</span></div>
-        </div>
+  <h1>Astro ICT Chart Panel</h1>
 
-        <div class="controls">
-          <label class="small">Symbol</label>
-          <input id="symbol" value="AAPL" />
-          <label class="small">Interval</label>
-          <select id="interval">
-            <option value="1min">1m</option>
-            <option value="5min">5m</option>
-            <option value="15min">15m</option>
-            <option value="1h">1h</option>
-            <option value="1day">1d</option>
-          </select>
-
-          <button id="loadBtn">Load</button>
-          <button id="recreateBtn" title="recreate chart">Recreate</button>
-          <button id="autoBtn">Auto: OFF</button>
-        </div>
-
-        <div id="chart"></div>
-        <div class="status small">Tip: use the load button to fetch data from backend. Auto refresh updates every 15s when enabled.</div>
-      </div>
-    </div>
-
-    <div class="right panel">
-      <div><strong>Health / Logs</strong></div>
-      <div class="small status">Backend health: <span id="backendHealth">checking…</span></div>
-      <div style="margin-top:8px;">
-        <button id="checkHealth">Check Health</button>
-        <button id="testApi">Test API</button>
-      </div>
-
-      <div class="log" id="log">Ready.</div>
-    </div>
+  <!-- Controls -->
+  <div>
+    <input type="text" id="symbol" value="AAPL" placeholder="Symbol"/>
+    <select id="interval">
+      <option value="1min">1m</option>
+      <option value="5min">5m</option>
+      <option value="15min">15m</option>
+      <option value="1h">1h</option>
+      <option value="1day">1d</option>
+    </select>
+    <button onclick="recreateChart()">Load</button>
   </div>
 
-  <!-- App script -->
-  <script src="./app.js"></script>
+  <!-- Chart container -->
+  <div id="chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
+
+  <!-- AI Mentor / Signals placeholders -->
+  <div style="margin-top:20px;">
+    <h3>AI Mentor</h3>
+    <p id="mentor">AI mentor demo text</p>
+    <button onclick="document.getElementById('mentor').innerText='Signals refreshed'">Refresh Mentor</button>
+
+    <h3>Signals</h3>
+    <button onclick="alert('Signals shown')">Show / Hide</button>
+  </div>
+
+  <!-- ✅ App logic -->
+  <script src="app.js"></script>
 </body>
 </html>

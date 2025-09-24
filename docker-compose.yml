@@ -1,29 +1,15 @@
 services:
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend # or your backend Dockerfile path
-    image: astro-ict-charting-panel-backend:latest
-    container_name: astro-ict-charting-panel-backend
+    build: ./backend
+    container_name: astro-ict-backend
+    env_file: .env
     ports:
       - "8000:8000"
-    environment:
-      - PYTHONUNBUFFERED=1
-    # adjust as needed: command, volumes, env_file, etc.
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: astro-ict-charting-panel-frontend:latest
-    container_name: astro-ict-charting-panel-frontend
+    build: ./frontend
+    container_name: astro-ict-frontend
     ports:
       - "3000:80"
-    depends_on:
-      - backend
     restart: unless-stopped
-    # recommended for dev: mount local files so edits to conf/public apply
-    # volumes:
-    #   - ./frontend/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
-    #   - ./frontend/public:/usr/share/nginx/html:ro

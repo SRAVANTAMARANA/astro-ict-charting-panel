@@ -1,70 +1,60 @@
-let chart, candleSeries;
-let dark = false;
-const chartDiv = document.getElementById("chart");
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Astro ICT Chart Panel</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; }
+    #container { display:flex; gap:12px; padding:12px;}
+    #left { width: 70%; }
+    #right { width: 30%; max-width: 420px; }
+    #chart { height: 560px; width: 100%; background:#fff; border:1px solid #ddd; }
+    .controls { margin-bottom: 8px; }
+    .status { font-size:12px; color:#666; margin-top:8px; }
+    button { padding:6px 10px; }
+    input, select { padding:6px; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="left">
+      <h2>Astro ICT Chart Panel</h2>
+      <div id="chart"></div>
+      <div class="status" id="status">Status: idle</div>
+    </div>
 
-function recreateChart() {
-  if (chart) chart.remove();
+    <div id="right">
+      <div class="controls">
+        <label>Symbol: <input id="symbol" value="AAPL" /></label><br/>
+        <label>Interval:
+          <select id="interval">
+            <option value="1min">1m</option>
+            <option value="5min">5m</option>
+            <option value="15min">15m</option>
+            <option value="1h">1h</option>
+            <option value="1day">1d</option>
+          </select>
+        </label>
+      </div>
 
-  chart = LightweightCharts.createChart(chartDiv, {
-    width: chartDiv.clientWidth,
-    height: chartDiv.clientHeight,
-    layout: {
-      background: { color: dark ? "#0b1220" : "#ffffff" },
-      textColor: dark ? "#dbeafe" : "#333",
-    },
-    rightPriceScale: { borderVisible: false },
-    timeScale: { borderVisible: false },
-  });
+      <div class="controls">
+        <button id="loadBtn">Load</button>
+        <button id="tvBtn">TV Style (toggle)</button>
+      </div>
 
-  candleSeries = chart.addCandlestickSeries();
-}
+      <div>
+        <h3>Signals</h3>
+        <div id="signals">AI mentor demo text</div>
+      </div>
+    </div>
+  </div>
 
-async function loadData() {
-  const symbol = document.getElementById("symbol").value;
-  const interval = document.getElementById("interval").value;
-  document.getElementById("status").innerText = "Status: loading...";
+  <!-- Lightweight Charts UMD standalone (Production) -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
-  try {
-    // ✅ Always fetch from backend:8000
-    const res = await fetch(
-      `http://localhost:8000/ict/candles?symbol=${symbol}&interval=${interval}&limit=100`
-    );
-    const data = await res.json();
-
-    if (data.candles) {
-      const formatted = data.candles.map(c => ({
-        time: Math.floor(new Date(c.time).getTime() / 1000),
-        open: parseFloat(c.open),
-        high: parseFloat(c.high),
-        low: parseFloat(c.low),
-        close: parseFloat(c.close),
-      }));
-      recreateChart();
-      candleSeries.setData(formatted);
-      document.getElementById("status").innerText = "Status: loaded";
-    } else {
-      document.getElementById("status").innerText = "Status: no data";
-    }
-  } catch (err) {
-    console.error(err);
-    document.getElementById("status").innerText = "Status: error";
-  }
-}
-
-function toggleDark() {
-  dark = !dark;
-  recreateChart();
-}
-
-// Resize support
-window.addEventListener("resize", () => {
-  if (chart) {
-    chart.applyOptions({
-      width: chartDiv.clientWidth,
-      height: chartDiv.clientHeight,
-    });
-  }
-});
-
-// init
-recreateChart();
+  <!-- App logic -->
+  <script src="/static/app.js"></script>
+</body>
+</html>

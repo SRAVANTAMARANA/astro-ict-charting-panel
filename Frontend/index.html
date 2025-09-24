@@ -1,129 +1,28 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Astro ICT Chart Panel — TradingView</title>
-
-  <!-- TradingView embeddable widget (public) -->
+  <title>Astro ICT - TradingView</title>
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
-  <style>
-    html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:#f4f6f8}
-    .top{display:flex;gap:8px;padding:10px;background:#fff;border-bottom:1px solid #ddd;align-items:center}
-    .top input,.top select{padding:6px}
-    .btn{padding:6px 10px;background:#0b84ff;color:#fff;border:none;border-radius:4px;cursor:pointer}
-    .container{display:flex;gap:12px;padding:12px}
-    .left{flex:1}
-    #tv_chart_container{width:100%;height:640px;background:#fff;border:1px solid #ddd}
-    .right{width:360px}
-    #log{height:200px;overflow:auto;background:#fff;border:1px solid #ddd;padding:8px;font-size:13px}
-  </style>
+  <style>body,html{height:100%;margin:0}#tvchart{width:100%;height:100vh}</style>
 </head>
 <body>
-  <div class="top">
-    Symbol: <input id="symbol" value="AAPL" />
-    Exchange (optional): <input id="exchange" placeholder="e.g. NASDAQ" style="width:140px"/>
-    Interval:
-    <select id="interval">
-      <option value="1">1 (minute)</option>
-      <option value="5" selected>5</option>
-      <option value="15">15</option>
-      <option value="60">60</option>
-      <option value="D">D</option>
-      <option value="W">W</option>
-    </select>
-    <button id="loadBtn" class="btn">Load</button>
-    <span id="status" style="margin-left:12px">status: ready</span>
-  </div>
-
-  <div class="container">
-    <div class="left">
-      <div id="tv_chart_container"></div>
-    </div>
-
-    <div class="right">
-      <h3>Notes / Logs</h3>
-      <div id="log">Logs will appear here</div>
-    </div>
-  </div>
-
+  <div id="tvchart"></div>
   <script>
-    // small logging helper
-    function log(msg){
-      const el = document.getElementById('log');
-      const now = new Date().toLocaleTimeString();
-      el.innerText = now + ' — ' + msg + '\n' + el.innerText;
-      console.log(msg);
-    }
-
-    // current widget ref
-    let tvWidget = null;
-
-    // build the TradingView widget with basic options
-    function createTradingViewWidget(symbolFull, interval) {
-      // remove previous widget if present
-      if (tvWidget && typeof tvWidget.remove === 'function') {
-        try { tvWidget.remove(); } catch(e){ console.warn('remove widget failed', e); }
-        tvWidget = null;
-      }
-
-      const widgetOptions = {
-        symbol: symbolFull,           // e.g. "NASDAQ:AAPL" or "AAPL"
-        interval: interval,           // string: '1','5','15','60','D','W' ...
-        container_id: "tv_chart_container",
-        // width/height - widget will fit container
-        autosize: true,
-        timezone: "Etc/UTC",
-        theme: "light",
-        style: "1",
-        locale: "en",
-        toolbar_bg: "#f1f3f6",
-        enable_publishing: false,
-        allow_symbol_change: true,
-        hide_top_toolbar: false,
-        withdateranges: true,
-        studies: [],
-        details: true,
-        // If you later want to use a custom datafeed, set datafeed here.
-        // datafeed: new Datafeeds.UDFCompatibleDatafeed("https://your-backend/or/thirdparty"),
-      };
-
-      log("Creating TradingView widget for " + symbolFull + " interval " + interval);
-      try {
-        tvWidget = new TradingView.widget(widgetOptions);
-        document.getElementById('status').innerText = 'status: widget created ' + symbolFull;
-      } catch (err) {
-        console.error('TradingView widget creation failed', err);
-        log('TV widget creation failed: ' + (err && err.message));
-        document.getElementById('status').innerText = 'status: widget error';
-      }
-    }
-
-    // UI wiring
-    document.getElementById('loadBtn').addEventListener('click', () => {
-      const sym = document.getElementById('symbol').value.trim();
-      const exch = document.getElementById('exchange').value.trim();
-      const interval = document.getElementById('interval').value;
-      if (!sym) { alert('Please enter a symbol'); return; }
-      const symbolFull = exch ? `${exch}:${sym}` : sym;
-      createTradingViewWidget(symbolFull, interval);
+    new TradingView.widget({
+      "width": "100%",
+      "height": "100%",
+      "symbol": "NASDAQ:AAPL",
+      "interval": "60",
+      "container_id": "tvchart",
+      "locale": "en",
+      "toolbar_bg": "#f1f3f6",
+      "enable_publishing": false,
+      "hide_side_toolbar": false,
+      "allow_symbol_change": true,
+      "studies": ["MACD@tv-basicstudies","RSI@tv-basicstudies"]
     });
-
-    // auto-load initial
-    window.addEventListener('DOMContentLoaded', () => {
-      log('Page ready');
-      const sym = document.getElementById('symbol').value;
-      const exch = document.getElementById('exchange').value || '';
-      const interval = document.getElementById('interval').value;
-      const symbolFull = exch ? `${exch}:${sym}` : sym;
-      createTradingViewWidget(symbolFull, interval);
-    });
-
-    // Notes: Errors in the browser console from TradingView (tv.js) are typically descriptive.
-    // If you later want to feed your own candlestick data (from your backend/twelvedata/finnhub),
-    // you will need to implement a TradingView-compatible Datafeed (UDF or the newer JS API).
-    // I can help implement that if you want the widget to read your backend candles directly.
   </script>
 </body>
 </html>

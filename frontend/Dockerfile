@@ -1,4 +1,4 @@
-FROM nginx:1.28-alpine
+FROM nginx:alpine
 
 # overwrite default nginx.conf
 COPY nginx.conf /etc/nginx/nginx.conf

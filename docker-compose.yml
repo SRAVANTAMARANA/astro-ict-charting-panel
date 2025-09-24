@@ -1,22 +1,16 @@
-# docker-compose.yml
 services:
   backend:
-    build:
-      context: ./backend
+    build: ./Backend
     container_name: astro-ict-backend
-    restart: unless-stopped
-    environment:
-      - TWELVEDATA_APIKEY=${TWELVEDATA_APIKEY:-YOUR_TWELVEDATA_KEY}
-      - FINNHUB_KEY=${FINNHUB_KEY:-YOUR_FINNHUB_KEY}
+    env_file:
+      - .env
     ports:
       - "8000:8000"
+    restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
+    build: ./Frontend
     container_name: astro-ict-frontend
-    restart: unless-stopped
     ports:
-      - "3000:80"
-    depends_on:
-      - backend
+      - "3000:8080"
+    restart: unless-stopped

@@ -1,0 +1,67 @@
+cat > index.html <<'EOF'
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Astro ICT Chart Panel (TradingView)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { margin:0; font-family:Arial; }
+    header { padding:12px; background:#fff; border-bottom:1px solid #ddd; display:flex; gap:12px; align-items:center }
+    #tv_chart { width:100%; height:90vh; }
+  </style>
+  <script src="https://s3.tradingview.com/tv.js"></script>
+</head>
+<body>
+  <header>
+    <label>Symbol <input id="symbol" value="XAUUSD" /></label>
+    <label>Interval 
+      <select id="interval">
+        <option value="1">1m</option>
+        <option value="5" selected>5m</option>
+        <option value="15">15m</option>
+        <option value="60">1h</option>
+        <option value="D">1d</option>
+      </select>
+    </label>
+    <button id="loadBtn">Load</button>
+  </header>
+
+  <div id="tv_chart"></div>
+
+<script>
+function normalizeSymbol(s) {
+  s = s.trim().toUpperCase();
+  if (["XAUUSD","XAGUSD","EURUSD","GBPUSD","USDJPY"].includes(s)) return "OANDA:" + s;
+  if (/^[A-Z]{1,5}$/.test(s)) return "NASDAQ:" + s;
+  return s;
+}
+function loadChart() {
+  const symbol = normalizeSymbol(document.getElementById("symbol").value);
+  const interval = document.getElementById("interval").value;
+  document.getElementById("tv_chart").innerHTML = "";
+  new TradingView.widget({
+    container_id: "tv_chart",
+    autosize: true,
+    symbol: symbol,
+    interval: interval,
+    theme: "light",
+    style: "1",
+    timezone: "Etc/UTC",
+    locale: "en",
+    toolbar_bg: "#f1f3f6",
+    hide_side_toolbar: false,
+    allow_symbol_change: true,
+    withdateranges: true,
+    details: true,
+    hotlist: true,
+    calendar: true,
+    studies: ["MASimple@tv-basicstudies"],
+  });
+}
+document.getElementById("loadBtn").addEventListener("click", loadChart);
+window.addEventListener("DOMContentLoaded", loadChart);
+</script>
+</body>
+</html>
+EOF

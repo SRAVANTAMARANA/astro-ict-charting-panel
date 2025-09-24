@@ -1,31 +1,355 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>ICT Charting Panel</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
+  <title>Astro ICT Chart Panel</title>
+  
+  <!-- TradingView Widget -->
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
+  
+  <style>
+    :root{
+      --primary: #1a73e8;
+      --secondary: #f1f3f4;
+      --success: #34a853;
+      --danger: #ea4335;
+      --warning: #fbbc05;
+      --dark: #202124;
+      --light: #ffffff;
+      --panel-bg: #f5f7fb;
+      --btn-bg: #0b84ff;
+      --btn-color: #fff;
+    }
+    
+    html,body{height:100%;margin:0;font-family:Inter, Arial, Helvetica, sans-serif;background:var(--panel-bg);}
+    .app{display:flex;flex-direction:column;height:100vh;gap:12px;padding:12px;}
+    header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border-bottom:1px solid #ddd;}
+    header h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{padding:6px 10px;border-radius:4px;border:1px solid #ccc;background:var(--btn-bg);color:var(--btn-color);cursor:pointer}
+    button.secondary{background:#eee;color:#111;border:1px solid #ccc}
+    .main{display:flex;flex:1;gap:12px;padding:12px}
+    .left{flex:1;display:flex;flex-direction:column;gap:12px}
+    #chartContainer{flex:1;border:1px solid #ddd;position:relative;overflow:hidden;background:var(--light)}
+    #chartToolbar{position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:6px}
+    .small{font-size:12px}
+    .hidden{display:none}
+    .tvWrap{height:100%;width:100%;background:var(--light);z-index:5}
+    .panel{background:var(--light);border:1px solid #ddd;padding:12px;height:300px;overflow:auto}
+    .small{font-size:12px;color:var(--gray)}
+    .status-indicator{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--gray)}
+    .status-dot{width:8px;height:8px;border-radius:50%;background-color:var(--success)}
+    .loading{background-color:var(--warning)}
+    .error{background-color:var(--danger)}
+    .info-panel{background:var(--light);border:1px solid #ddd;padding:12px;margin-top:12px}
+    .info-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--secondary)}
+    .info-label{font-weight:500;color:var(--dark)}
+    .info-value{color:var(--primary);font-weight:500}
+    .right{width:360px;display:flex;flex-direction:column;gap:12px}
+    .section-title{margin:0 0 8px 0}
+    .statusbar{height:36px;display:flex;align-items:center;padding:0 12px;gap:12px}
+  </style>
 </head>
 <body>
-  <div id="app">
-    <h1>ICT Charting Panel</h1>
-    <div>
-      <label>Symbol: <input id="symbol" value="AAPL"></label>
-      <label>Interval:
-        <select id="interval">
-          <option value="1min">1min</option>
-          <option value="5min">5min</option>
+  <div class="app">
+    <header>
+      <h1>Astro ICT Chart Panel</h1>
+      
+      <div class="controls">
+        <label class="small">Symbol:
+          <input id="symbolInput" value="XAUUSD" style="padding:6px;margin-left:6px" />
+        </label>
+        
+        <select id="intervalSelect" style="padding:6px">
+          <option value="1m">1m</option>
+          <option value="5m" selected>5m</option>
+          <option value="15m">15m</option>
           <option value="1h">1h</option>
-          <option value="1day">1day</option>
+          <option value="1d">1d</option>
         </select>
-      </label>
-      <button id="fetchBtn">Fetch time series</button>
-      <button id="finnBtn">Fetch Finnhub (quote)</button>
-    </div>
+        
+        <button id="loadBtn">Load</button>
+        <button id="toggleTv" class="secondary">Toggle TV</button>
+        <button id="themeBtn" class="secondary">Dark</button>
+        <button id="fullscreenBtn" class="secondary">Fullscreen</button>
+      </div>
+    </header>
 
-    <pre id="out" style="white-space:pre-wrap;max-height:60vh;overflow:auto;"></pre>
+    <div class="main">
+      <div class="left">
+        <div class="chart-container">
+          <div id="chartToolbar" class="small">
+            <span id="status" style="background:#fff;padding:4px;border-radius:4px;border:1px solid #ccc">idle</span>
+          </div>
+          
+          <!-- Chart area -->
+          <div id="chart" style="width:100%;height:100%;min-height:380px"></div>
+          
+          <!-- TradingView iframe (hidden by default) -->
+          <div id="tv" class="hidden tvWrap" style="position:absolute;left:0;top:0;right:0;bottom:0;background:#fff;z-index:5">
+            <!-- supply your TradingView widget URL below (or paste in input->tradingviewURL) -->
+            <iframe id="tvFrame" src="" style="width:100%;height:100%;border:0"></iframe>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px">
+          <div class="panel" style="flex:1">
+            <h3 style="margin:0 0 8px 0">Signals</h3>
+            <div id="signals">No signals yet</div>
+          </div>
+
+          <div class="panel" style="width:240px">
+            <h3 style="margin:0 0 8px 0">AI Mentor</h3>
+            <div id="mentor">AI mentor demo text</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="panel">
+          <h3 style="margin:0 0 8px 0">Backend Status</h3>
+          <div id="backendStatus">not checked</div>
+        </div>
+
+        <div class="panel">
+          <h3 style="margin:0 0 8px 0">Logs</h3>
+          <div id="log" style="font-size:12px;color:#333;max-height:240px;overflow:auto"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <script src="app.js"></script>
+  <script>
+    /*
+      Single-file frontend:
+      - Uses window.createChart from the standalone UMD bundle.
+      - Polls backend /ict/candles for candle data and applies to candlestick series.
+      - Default API_BASE = http://localhost:8000 (adjust if backend port differs).
+    */
+
+    const API_BASE = (window.API_BASE || 'http://localhost:8000'); // change if needed
+    const POLL_INTERVAL_MS = 5000; // fetch interval
+    let chart = null;
+    let candleSeries = null;
+    let apiTimer = null;
+    let themeDark = false;
+
+    const chartDiv = document.getElementById('chart');
+    const symbolInput = document.getElementById('symbolInput');
+    const intervalSelect = document.getElementById('intervalSelect');
+    const loadBtn = document.getElementById('loadBtn');
+    const tvBtn = document.getElementById('tvBtn');
+    const miniLoader = document.getElementById('miniLoader');
+    const statusText = document.getElementById('statusText');
+    const lastFetched = document.getElementById('lastFetched');
+    const signalsList = document.getElementById('signalsList');
+    const signalsTray = document.getElementById('signals');
+    const showHide = document.getElementById('showHide');
+    const themeToggle = document.getElementById('themeToggle');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+    /* --- utility: pick createChart safely --- */
+    function getCreateChart() {
+      if (window.createChart) return window.createChart;
+      if (typeof window.createChart === 'function') return window.createChart;
+      return null;
+    }
+
+    /* recreate chart safely */
+    function createChart() {
+      const createChart = getCreateChart();
+      if (!createChart) {
+        console.error('createChart not found. Check script include.');
+        statusText.textContent = 'LW not loaded';
+        return;
+      }
+
+      // Remove old chart if allowed
+      try { if (chart) chart.remove(); } catch(e) { console.warn(e); } }
+
+      // Apply theme colors
+      const bg = currentThemeDark ? getComputedStyle(document.documentElement).getPropertyValue('--bg-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--bg-light').trim();
+      const textColor = currentThemeDark ? getComputedStyle(document.documentElement).getPropertyValue('--fg-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--fg-light').trim();
+
+      try {
+        chart = createChart(chartDiv, {
+          width: chartDiv.clientWidth,
+          height: chartDiv.clientHeight,
+          layout: {
+            background: { color: bg || (currentThemeDark ? '#071024' : '#ffffff') },
+            textColor: textColor || (currentThemeDark ? '#dbeafe' : '#333')
+          },
+          rightPriceScale: { borderVisible: false },
+          timeScale: { borderVisible: false },
+          grid: { vertLines: { color: 'rgba(197,197,197,0.06)' }, horzLines: { color: 'rgba(197,197,197,0.06)' }
+        });
+      } catch (e) {
+        console.error('createChart() failed', e);
+        statusText.textContent = 'Error: cannot create chart';
+        return;
+      }
+
+      // Defensive check
+      if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+        console.error('chart.addCandlestickSeries missing', chart);
+        statusText.textContent = 'Error: addCandlestickSeries not available';
+        return;
+      }
+
+      // create candlestick series
+      try {
+        candleSeries = chart.addCandlestickSeries({
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          borderVisible: true,
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350'
+        });
+      } catch (err) {
+        console.error('Failed addCandlestickSeries:', err);
+        log('Failed addCandlestickSeries: ' + (err && err.message));
+        statusText.textContent = 'Series error';
+        return;
+      }
+
+      // resize handler
+      window.addEventListener('resize', () => {
+        if (!chart) return;
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          try { chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight }); }
+          catch(e){ console.warn('resize apply error', e) }
+        }, 120);
+      });
+
+      statusText.textContent = 'Chart ready';
+      log('Lightweight chart created');
+    }
+
+    /* Fetch candles from backend and apply to series
+       expects backend endpoint like:
+       GET ${API_BASE}/ict/candles?symbol=XAUUSD&interval=1m&limit=200
+       response: { symbol: "...", candles: [ { time, open, high, low, close, volume }, ... ] }
+    */
+    async function fetchAndApplyCandles(symbol, interval, limit=200) {
+      miniLoader.style.display = 'inline-block';
+      statusText.textContent = 'fetching...';
+
+      try {
+        const url = `${API_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('server returned ' + res.status);
+        const j = await res.json();
+        // j.candles expected array; convert to chart format.
+        if (!j || !Array.isArray(j.candles)) {
+          console.warn('invalid candle payload');
+          statusText.textContent = 'invalid data';
+          return;
+        }
+
+        // transform backend candles into lightweight format
+        const data = j.candles.map(c => ({
+          time: isoOrEpoch(c.time), // string ISO or yyyy-mm-dd etc.
+          open: +c.open,
+          high: +c.high,
+          low: +c.low,
+          close: +c.close,
+          volume: c.volume
+        }));
+
+        if (data.length === 0) {
+          console.warn('No candles returned from backend');
+          statusText.textContent = 'no data';
+          return;
+        }
+
+        // Replace series data
+        candleSeries.setData(data);
+        // auto-fit time range (optional)
+        try { chart.timeScale().fitContent(); } catch(e) {}
+        statusText.textContent = `loaded ${data.length} candles for ${symbol}`;
+        log(`Updated series (${symbol} ${interval}) count=${data.length}`);
+      } catch (err) {
+        console.error(err);
+        log('Fetch error: ' + (err && err.message));
+        statusText.textContent = 'fetch error';
+      }
+    }
+
+    /* Start polling */
+    function startPolling(symbol, interval) {
+      if (apiTimer) clearInterval(apiTimer);
+      // first immediate fetch
+      fetchAndApplyCandles(symbol, interval);
+      apiTimer = setInterval(() => fetchAndApplyCandles(symbol, interval), POLL_INTERVAL_MS);
+    }
+
+    /* UI wiring */
+    document.addEventListener('DOMContentLoaded', () => {
+      // create chart
+      createChart();
+
+      // UI nodes
+      loadBtn.addEventListener('click', loadSymbol);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && document.activeElement === symbolInput) loadSymbol();
+      });
+
+      document.getElementById('refreshSignals').addEventListener('click', refreshSignals);
+
+      // start initial fetch
+      const initialSymbol = $('symbolInput').value || 'XAUUSD';
+      startPolling(initialSymbol, $('intervalSelect').value);
+    });
+
+    /* Cleanup before unload */
+    window.addEventListener('beforeunload', () => {
+      if (apiTimer) clearInterval(apiTimer);
+    });
+
+    /* Utility functions */
+    function isoOrEpoch(v){
+      // backend may return ISO time string; library accepts ISO string or object {time: 'YYYY-MM-DDTHH:MM:SSZ'}
+      return v;
+    }
+
+    function log(m){
+      const el = $('log');
+      el.innerText = (new Date()).toLocaleTimeString() + ' — ' + m + '\n' + el.innerText;
+    }
+
+    function setStatus(s){
+      $('status').innerText = s;
+    }
+
+    // Initial load
+    (function init(){
+      // First sanity check that lightweight-charts exists
+      const createChart = getCreateChart();
+      if (!createChart) {
+        console.error('lightweight-charts not available. Please ensure the standalone bundle is included before this script.');
+        statusText.textContent = 'Error: chart library missing';
+        return;
+      }
+
+      createChart();
+      // Wire buttons
+      loadBtn.addEventListener('click', loadSymbol);
+      document.addEventListener('keydown', (e)=> {
+        if (e.key === 'Enter' && document.activeElement === symbolInput) loadSymbol();
+      });
+
+      document.getElementById('refreshSignals').addEventListener('click', refreshSignals);
+
+      // Load initial data
+      refreshSignals();
+      loadSymbol();
+    })();
+
+  </script>
 </body>
 </html>

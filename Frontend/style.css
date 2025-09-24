@@ -1,0 +1,7 @@
+/* frontend/style.css */
+body{font-family:system-ui,Segoe UI,Roboto,Arial; margin:20px;background:#fafafa;}
+#app{max-width:1000px;margin:0 auto}
+h1{margin-bottom:10px}
+label{margin-right:12px}
+button{margin-left:6px;padding:6px 10px}
+pre{background:#111;color:#dcdcdc;padding:10px;border-radius:6px}

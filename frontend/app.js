@@ -1,60 +1,111 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Astro ICT Chart Panel</title>
-  <link rel="stylesheet" href="/static/styles.css" />
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; }
-    #container { display:flex; gap:12px; padding:12px;}
-    #left { width: 70%; }
-    #right { width: 30%; max-width: 420px; }
-    #chart { height: 560px; width: 100%; background:#fff; border:1px solid #ddd; }
-    .controls { margin-bottom: 8px; }
-    .status { font-size:12px; color:#666; margin-top:8px; }
-    button { padding:6px 10px; }
-    input, select { padding:6px; }
-  </style>
-</head>
-<body>
-  <div id="container">
-    <div id="left">
-      <h2>Astro ICT Chart Panel</h2>
-      <div id="chart"></div>
-      <div class="status" id="status">Status: idle</div>
-    </div>
+// frontend/app.js
 
-    <div id="right">
-      <div class="controls">
-        <label>Symbol: <input id="symbol" value="AAPL" /></label><br/>
-        <label>Interval:
-          <select id="interval">
-            <option value="1min">1m</option>
-            <option value="5min">5m</option>
-            <option value="15min">15m</option>
-            <option value="1h">1h</option>
-            <option value="1day">1d</option>
-          </select>
-        </label>
-      </div>
+(function () {
+  // check library
+  const lib = window.LightweightCharts;
+  if (!lib || typeof lib.createChart !== 'function') {
+    console.error('LightweightCharts not found (window.LightweightCharts). Did you load the UMD script?');
+    document.getElementById('status').innerText = 'Status: LightweightCharts missing';
+    return;
+  }
 
-      <div class="controls">
-        <button id="loadBtn">Load</button>
-        <button id="tvBtn">TV Style (toggle)</button>
-      </div>
+  const createChart = lib.createChart;
+  const chartRoot = document.getElementById('chart-root');
+  let chart = null;
+  let candleSeries = null;
 
-      <div>
-        <h3>Signals</h3>
-        <div id="signals">AI mentor demo text</div>
-      </div>
-    </div>
-  </div>
+  function createNewChart() {
+    if (chart) {
+      try { chart.remove(); } catch (e) { console.warn('remove failed', e); }
+      chart = null;
+      candleSeries = null;
+    }
 
-  <!-- Lightweight Charts UMD standalone (Production) -->
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    chart = createChart(chartRoot, {
+      width: chartRoot.clientWidth,
+      height: chartRoot.clientHeight,
+      layout: {
+        background: { color: '#ffffff' },
+        textColor: '#333',
+      },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false }
+    });
 
-  <!-- App logic -->
-  <script src="/static/app.js"></script>
-</body>
-</html>
+    candleSeries = chart.addCandlestickSeries(); // this should exist
+    chart.timeScale().fitContent();
+  }
+
+  // handle window resize
+  window.addEventListener('resize', () => {
+    if (chart) {
+      chart.applyOptions({ width: chartRoot.clientWidth, height: chartRoot.clientHeight });
+    }
+  });
+
+  // sample: convert TwelveData time_series response to candlesticks
+  function convertTwelveDataToCandles(twDataArray) {
+    // twDataArray is array of objects with datetime, open, high, low, close, volume
+    return twDataArray.map(item => {
+      // LightweightCharts expects timestamp or ISO string in time
+      // Use ISO date/time (or 'yyyy-mm-dd HH:mm:ss' depending on input)
+      return {
+        time: item.datetime, // string ISO is OK in latest versions
+        open: parseFloat(item.open),
+        high: parseFloat(item.high),
+        low: parseFloat(item.low),
+        close: parseFloat(item.close)
+      };
+    }).reverse(); // TwelveData returns most recent first; LightweightCharts expects chronological order
+  }
+
+  // load data from TwelveData (example)
+  async function loadFromTwelveData(symbol, interval) {
+    document.getElementById('status').innerText = 'Status: loading...';
+    try {
+      // Replace this URL with your real TwelveData or API endpoint & key
+      // For debugging you used: https://api.twelvedata.com/time_series?apikey=KEY&symbol=AAPL&interval=1min
+      const key = '55a08a202ca740589278abe23d94436a'; // example key you posted earlier (keep secure)
+      const url = `https://api.twelvedata.com/time_series?apikey=${key}&symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&outputsize=100&format=JSON`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.status === 'error' || json.code === 404 || !json.values) {
+        console.error('API error', json);
+        document.getElementById('status').innerText = 'Status: API error - see console';
+        return;
+      }
+      const values = json.values; // array
+      const candles = convertTwelveDataToCandles(values);
+      candleSeries.setData(candles);
+      chart.timeScale().fitContent();
+      document.getElementById('status').innerText = `Status: loaded ${candles.length} bars`;
+    } catch (err) {
+      console.error(err);
+      document.getElementById('status').innerText = 'Status: load failed';
+    }
+  }
+
+  // wire controls
+  document.getElementById('load').addEventListener('click', () => {
+    const symbol = document.getElementById('symbol').value.trim();
+    const interval = document.getElementById('interval').value;
+    if (!symbol) {
+      alert('Please enter a symbol');
+      return;
+    }
+    // ensure chart exists
+    if (!chart) createNewChart();
+    loadFromTwelveData(symbol, interval);
+  });
+
+  // initial chart
+  createNewChart();
+
+  // for debug: set a small sample if API access is blocked
+  const sample = [
+    { time: '2025-09-24T02:11:13.357Z', open: 1900.3, high: 1900.9, low: 1899.7, close: 1899.4 },
+    { time: '2025-09-24T02:12:13.357Z', open: 1900.3, high: 1900.6, low: 1899.7, close: 1900.3 },
+    { time: '2025-09-24T02:13:13.357Z', open: 1900.4, high: 1901.0, low: 1899.8, close: 1900.9 }
+  ];
+  // candleSeries.setData(sample.reverse()); // uncomment to test static sample
+})();

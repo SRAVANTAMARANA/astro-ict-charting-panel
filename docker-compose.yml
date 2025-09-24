@@ -1,6 +1,8 @@
 services:
   frontend:
-    build: ./Frontend
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
     image: astro-ict-charting-panel-frontend
     ports:
       - "3000:80"

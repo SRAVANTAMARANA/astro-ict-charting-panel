@@ -1,16 +1,14 @@
-// app.js
 let chart;
 let candleSeries;
 
 async function recreateChart() {
   const chartDiv = document.getElementById("chart");
 
-  // Clear any existing chart
   if (chart) {
     chart.remove();
   }
 
-  // ✅ Use LightweightCharts global from standalone script
+  // ✅ Create chart via LightweightCharts global
   chart = LightweightCharts.createChart(chartDiv, {
     width: chartDiv.clientWidth,
     height: chartDiv.clientHeight,
@@ -22,10 +20,8 @@ async function recreateChart() {
     timeScale: { borderVisible: false },
   });
 
-  // ✅ Create candlestick series correctly
   candleSeries = chart.addCandlestickSeries();
 
-  // Load candles
   await loadCandles();
 }
 
@@ -44,7 +40,6 @@ async function loadCandles() {
       return;
     }
 
-    // ✅ Transform to {time, open, high, low, close}
     const formatted = data.map(d => ({
       time: Math.floor(new Date(d.time).getTime() / 1000),
       open: parseFloat(d.open),
@@ -71,5 +66,5 @@ window.addEventListener("resize", () => {
   }
 });
 
-// Initialize on page load
+// Auto init
 window.addEventListener("DOMContentLoaded", recreateChart);

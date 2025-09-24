@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Astro ICT Panel — Demo</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; background:#0b1220; color:#dbeafe; }
+    #top { padding: 10px; display:flex; gap:8px; align-items:center; background:#071023; }
+    input, select, button { padding:8px; border-radius:6px; border:1px solid #334155; background:#0b1220; color:#dbeafe; }
+    #chart { height: 520px; width:calc(100% - 20px); margin:10px; border-radius:8px; background:#071023; }
+    #log { padding:8px; font-size:13px; color:#cbd5e1; background:#041020; margin:10px; border-radius:6px; height:120px; overflow:auto; }
+  </style>
+  <!-- Lightweight Charts (TradingView lightweight) -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <div id="top">
+    <label>Symbol <input id="symbol" value="BTC/USDT" /></label>
+    <label>Interval
+      <select id="interval">
+        <option value="1m">1m</option>
+        <option value="5m">5m</option>
+        <option value="15m">15m</option>
+        <option value="30m">30m</option>
+        <option value="1h">1h</option>
+        <option value="4h">4h</option>
+        <option value="1d">1d</option>
+      </select>
+    </label>
+    <button id="load">Load Chart</button>
+    <button id="health">Health</button>
+    <span id="status" style="margin-left:12px"></span>
+  </div>
+
+  <div id="chart"></div>
+  <div id="log"></div>
+
+<script>
+const backendBase = window.location.origin.replace(/:3000(:|$)/, ':8000'); // helpful if frontend:3000 backend:8000 locally
+// fallback if origin mapping fails:
+const fallbackBackend = 'http://localhost:8000';
+
+function log(msg){
+  const el = document.getElementById('log');
+  el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + el.innerText;
+}
+
+async function health(){
+  try{
+    const r = await fetch((backendBase.includes('http://localhost') ? backendBase : fallbackBackend) + '/ict/health');
+    const j = await r.json();
+    document.getElementById('status').innerText = JSON.stringify(j);
+    log('health ok');
+  }catch(e){
+    document.getElementById('status').innerText = 'health failed';
+    log('health failed: ' + e.toString());
+  }
+}
+
+document.getElementById('health').addEventListener('click', health);
+
+let chart = null;
+let candleSeries = null;
+function createChart(container) {
+  if(chart) chart.remove();
+  chart = LightweightCharts.createChart(container, {
+    layout: { background: { color: '#071023' }, textColor: '#dbeafe' },
+    grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+    rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
+    timeScale: { borderColor: 'rgba(255,255,255,0.06)' },
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350'
+  });
+}
+
+function toLightweight(points){
+  // expect arrays o,h,l,c,t (unix seconds)
+  const {o,h,l,c,t} = points;
+  let out = [];
+  for(let i=0;i<t.length;i++){
+    out.push({ time: t[i], open: o[i], high: h[i], low: l[i], close: c[i] });
+  }
+  return out;
+}
+
+async function loadChart(){
+  const symbol = document.getElementById('symbol').value.trim();
+  const interval = document.getElementById('interval').value;
+  if(!symbol){ alert('symbol'); return; }
+  const backend = (backendBase.includes('http://localhost') ? backendBase : fallbackBackend);
+  document.getElementById('status').innerText = `loading ${symbol} ${interval}...`;
+  log(`Requesting ${symbol} ${interval} from backend...`);
+  try{
+    const url = `${backend}/ict/time_series?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`;
+    const r = await fetch(url);
+    if(!r.ok){
+      const t = await r.text();
+      log('backend error: ' + r.status + ' ' + t);
+      document.getElementById('status').innerText = 'backend error';
+      return;
+    }
+    const json = await r.json();
+    if(!json.ok){
+      log('provider errors: ' + JSON.stringify(json.errors || json));
+      document.getElementById('status').innerText = 'provider error';
+      return;
+    }
+    const data = json.data;
+    log('got data from ' + (data.source || 'provider'));
+    // data may already be in o,h,l,c,t or in finn format
+    let series = null;
+    if(data.source === 'finnhub'){
+      series = { o: data.o, h: data.h, l: data.l, c: data.c, t: data.t };
+    } else if(data.source === 'twelvedata' || data.source === 'alphavantage'){
+      series = { o: data.o, h: data.h, l: data.l, c: data.c, t: data.t || data.t };
+    } else {
+      // unknown format
+      log('unknown data format, attempting to map keys');
+      series = { o: data.o || data.open || [], h: data.h || data.high || [], l: data.l || data.low || [], c: data.c || data.close || [], t: data.t || data.time || [] };
+    }
+    if(!series || !series.c || series.c.length === 0){
+      log('no candles returned');
+      document.getElementById('status').innerText = 'no data';
+      return;
+    }
+    createChart(document.getElementById('chart'));
+    const lw = toLightweight(series);
+    candleSeries.setData(lw);
+    document.getElementById('status').innerText = `loaded ${symbol} (${data.source})`;
+  }catch(e){
+    log('loadChart error: ' + e.toString());
+    document.getElementById('status').innerText = 'error';
+  }
+}
+
+document.getElementById('load').addEventListener('click', loadChart);
+
+// on load, create empty chart
+createChart(document.getElementById('chart'));
+health();
+</script>
+</body>
+</html>

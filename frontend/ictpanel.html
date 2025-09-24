@@ -3,324 +3,71 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Astro ICT Chart Panel - Live</title>
+  <title>Astro ICT Chart Panel</title>
 
+  <!-- Basic styling -->
   <style>
-    :root{
-      --bg-light:#ffffff; --text-light:#111;
-      --bg-dark:#0b1220; --text-dark:#dbeafe;
-      --panel-bg: #f5f7fb;
-      --btn-bg:#0b84ff; --btn-color:#fff;
-    }
-    html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--panel-bg);}
-    .app{display:flex;flex-direction:column;height:100vh;}
-    header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border-bottom:1px solid #ddd;}
-    header h1{font-size:18px;margin:0}
-    .controls{display:flex;gap:8px;align-items:center}
-    button{padding:6px 10px;border-radius:4px;border:1px solid #ccc;background:var(--btn-bg);color:var(--btn-color);cursor:pointer}
-    button.secondary{background:#eee;color:#111;border:1px solid #ccc}
-    .main{display:flex;flex:1;gap:8px;padding:8px}
-    .left{flex:1;display:flex;flex-direction:column;gap:8px}
-    #chartContainer{flex:1;border:1px solid #ddd;position:relative;overflow:hidden;background:var(--bg-light)}
-    #chartToolbar{position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:6px}
-    .right{width:360px;display:flex;flex-direction:column;gap:8px}
-    .panel{background:#fff;border:1px solid #ddd;padding:8px;height:300px;overflow:auto}
-    .small{font-size:12px}
-    .hidden{display:none}
-    .tvWrap{height:100%;width:100%}
+    html,body { height:100%; margin:0; font-family: Arial, Helvetica, sans-serif; background:#f6f7fb; }
+    #root { display:flex; height:100vh; gap:12px; padding:12px; box-sizing:border-box; }
+    .left { width: 78%; display:flex; flex-direction:column; gap:8px; }
+    .right { width: 22%; min-width:220px; background:#fff; border-radius:6px; padding:10px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .panel { background:#fff; border-radius:6px; padding:8px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    #chart { flex:1; min-height:420px; border-radius:6px; overflow:hidden; background:#fff; }
+    .controls { display:flex; gap:8px; align-items:center; padding:8px 0; }
+    input, select, button { padding:6px 8px; border-radius:4px; border:1px solid #ddd; font-size:14px; }
+    button { cursor:pointer; background:#1976d2; color:#fff; border: none; }
+    .status { font-size:13px; color:#444; margin-top:6px; }
+    .log { margin-top:8px; font-family:monospace; font-size:12px; color:#444; max-height:240px; overflow:auto; background:#fafafa; padding:8px; border-radius:4px; border:1px dashed #eee; }
+    .small { font-size:12px; color:#666; }
   </style>
 
-  <!-- Lightweight Charts - standalone UMD bundle (production) -->
+  <!-- Lightweight Charts standalone build (exposes global LightweightCharts) -->
   <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-
 </head>
 <body>
-  <div class="app">
-    <header>
-      <h1>Astro ICT Chart Panel</h1>
-      <div class="controls">
-        <label class="small">Symbol:
-          <input id="symbolInput" value="XAUUSD" style="padding:6px;margin-left:6px" />
-        </label>
+  <div id="root">
+    <div class="left">
+      <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0">Astro ICT Chart Panel</h3>
+          <div class="small">Status: <span id="healthStatus">unknown</span></div>
+        </div>
 
-        <select id="intervalSelect" style="padding:6px">
-          <option value="1m">1m</option>
-          <option value="5m" selected>5m</option>
-          <option value="15m">15m</option>
-          <option value="1h">1h</option>
-          <option value="1d">1d</option>
-        </select>
+        <div class="controls">
+          <label class="small">Symbol</label>
+          <input id="symbol" value="AAPL" />
+          <label class="small">Interval</label>
+          <select id="interval">
+            <option value="1min">1m</option>
+            <option value="5min">5m</option>
+            <option value="15min">15m</option>
+            <option value="1h">1h</option>
+            <option value="1day">1d</option>
+          </select>
 
-        <button id="loadBtn">Load</button>
-        <button id="toggleTv" class="secondary">Toggle TV</button>
-        <button id="themeBtn" class="secondary">Dark</button>
-        <button id="fullscreenBtn" class="secondary">Fullscreen</button>
+          <button id="loadBtn">Load</button>
+          <button id="recreateBtn" title="recreate chart">Recreate</button>
+          <button id="autoBtn">Auto: OFF</button>
+        </div>
+
+        <div id="chart"></div>
+        <div class="status small">Tip: use the load button to fetch data from backend. Auto refresh updates every 15s when enabled.</div>
       </div>
-    </header>
+    </div>
 
-    <div class="main">
-      <div class="left">
-        <div id="chartContainer">
-          <div id="chartToolbar" class="small">
-            <span id="status" style="background:#fff;padding:4px;border-radius:4px;border:1px solid #ccc">idle</span>
-          </div>
-
-          <!-- Chart area -->
-          <div id="chart" style="width:100%;height:100%;min-height:380px"></div>
-
-          <!-- TradingView iframe (hidden by default) -->
-          <div id="tv" class="hidden tvWrap" style="position:absolute;left:0;top:0;right:0;bottom:0;background:#fff;z-index:5">
-            <!-- supply your TradingView widget URL below (or paste in input->tradingviewURL) -->
-            <iframe id="tvFrame" src="" style="width:100%;height:100%;border:0"></iframe>
-          </div>
-        </div>
-
-        <div style="display:flex;gap:8px">
-          <div class="panel" style="flex:1">
-            <h3 style="margin:0 0 8px 0">Signals</h3>
-            <div id="signals">No signals yet</div>
-          </div>
-
-          <div class="panel" style="width:240px">
-            <h3 style="margin:0 0 8px 0">AI Mentor</h3>
-            <div id="mentor">AI mentor demo text</div>
-          </div>
-        </div>
+    <div class="right panel">
+      <div><strong>Health / Logs</strong></div>
+      <div class="small status">Backend health: <span id="backendHealth">checking…</span></div>
+      <div style="margin-top:8px;">
+        <button id="checkHealth">Check Health</button>
+        <button id="testApi">Test API</button>
       </div>
 
-      <div class="right">
-        <div class="panel">
-          <h3 style="margin:0 0 8px 0">Backend Status</h3>
-          <div id="backendStatus">not checked</div>
-        </div>
-
-        <div class="panel">
-          <h3 style="margin:0 0 8px 0">Logs</h3>
-          <div id="log" style="font-size:12px;color:#333;max-height:240px;overflow:auto"></div>
-        </div>
-      </div>
+      <div class="log" id="log">Ready.</div>
     </div>
   </div>
 
-<script>
-/*
-  Single-file frontend:
-  - Uses window.createChart from the standalone UMD bundle.
-  - Polls backend /ict/candles for candle data and applies to candlestick series.
-  - Default API_BASE = http://localhost:8000 (adjust if backend port differs).
-*/
-
-const API_BASE = (window.API_BASE || 'http://localhost:8000'); // change if needed
-const POLL_INTERVAL_MS = 5000; // fetch interval
-let chart = null;
-let candleSeries = null;
-let apiTimer = null;
-let themeDark = false;
-
-const $ = id => document.getElementById(id);
-const log = (m) => {
-  const el = $('log');
-  el.innerText = (new Date()).toLocaleTimeString() + ' — ' + m + '\n' + el.innerText;
-};
-const setStatus = (s) => { $('status').innerText = s; };
-
-function isoOrEpoch(v){
-  // backend may return ISO time string; library accepts ISO string or object {time: 'YYYY-MM-DDTHH:MM:SSZ'}
-  // we'll pass the same 'time' string returned by backend
-  return v;
-}
-
-function createLightweightChart(){
-  if(!window.createChart){
-    log('ERROR: lightweight-charts not found on window.createChart. Check script include.');
-    setStatus('LW not loaded');
-    return;
-  }
-
-  const chartDiv = $('chart');
-  if(chart){
-    try{ chart.remove(); }catch(e){ console.warn(e); }
-    chart = null; candleSeries = null;
-  }
-
-  const layout = {
-    background: { color: themeDark? getComputedStyle(document.documentElement).getPropertyValue('--bg-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--bg-light').trim() },
-    textColor: themeDark? getComputedStyle(document.documentElement).getPropertyValue('--text-dark').trim() : getComputedStyle(document.documentElement).getPropertyValue('--text-light').trim(),
-    fontSize: 12
-  };
-
-  chart = window.createChart(chartDiv, {
-    width: chartDiv.clientWidth,
-    height: chartDiv.clientHeight,
-    layout,
-    rightPriceScale: { borderVisible: false },
-    timeScale: { borderVisible: false, rightOffset: 6, barSpacing: 12 },
-    grid: { vertLines: { color: 'rgba(197,197,197,0.06)' }, horzLines: { color: 'rgba(197,197,197,0.06)' } }
-  });
-
-  // create candlestick series
-  try{
-    candleSeries = chart.addCandlestickSeries({
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderVisible: true,
-      wickVisible: true
-    });
-  } catch(err){
-    console.error('Failed addCandlestickSeries:', err);
-    log('Failed addCandlestickSeries: ' + (err && err.message));
-    setStatus('Series error');
-    return;
-  }
-
-  // resize handler
-  window.addEventListener('resize', ()=> {
-    if(chart){
-      chart.applyOptions({ width: chartDiv.clientWidth, height: chartDiv.clientHeight });
-    }
-  });
-
-  setStatus('chart ready');
-  log('Lightweight chart created');
-}
-
-/* Fetch candles from backend and apply to series
-   expects backend endpoint like:
-   GET ${API_BASE}/ict/candles?symbol=XAUUSD&interval=1m&limit=200
-   response: { symbol: "...", candles: [ { time: "...", open: x, high:h, low:l, close:c, volume: v }, ... ] }
-*/
-async function fetchAndApplyCandles(symbol, interval, limit=200){
-  if(!candleSeries){
-    log('No candleSeries available to update');
-    return;
-  }
-  const url = `${API_BASE}/ict/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
-  setStatus('fetching...');
-  try{
-    const res = await fetch(url);
-    if(!res.ok){
-      log('Backend fetch failed: ' + res.status + ' ' + res.statusText);
-      setStatus('backend error');
-      $('backendStatus').innerText = `HTTP ${res.status} ${res.statusText}`;
-      return;
-    }
-    const j = await res.json();
-    // j.candles expected array; convert to chart format.
-    if(!j || !Array.isArray(j.candles)){
-      log('Invalid response format (no candles array)');
-      setStatus('invalid data');
-      return;
-    }
-
-    // transform backend candles into lightweight format
-    const data = j.candles.map(c => ({
-      time: isoOrEpoch(c.time), // string ISO or yyyy-mm-dd etc.
-      open: parseFloat(c.open),
-      high: parseFloat(c.high),
-      low: parseFloat(c.low),
-      close: parseFloat(c.close),
-      volume: c.volume !== undefined ? parseFloat(c.volume) : undefined
-    }));
-
-    if(data.length === 0){
-      log('No candles returned from backend');
-      setStatus('no data');
-      return;
-    }
-
-    // Replace series data
-    candleSeries.setData(data);
-    setStatus('data loaded ' + symbol + ' ' + interval + ' (' + data.length + ')');
-    $('backendStatus').innerText = `OK - ${symbol} ${interval} - ${data.length} bars`;
-    log(`Updated series (${symbol} ${interval}) count=${data.length}`);
-  }catch(err){
-    console.error(err);
-    log('Fetch error: ' + (err && err.message));
-    setStatus('fetch error');
-  }
-}
-
-/* Start polling */
-function startPolling(symbol, interval){
-  if(apiTimer) clearInterval(apiTimer);
-  // first immediate fetch
-  fetchAndApplyCandles(symbol, interval);
-  apiTimer = setInterval(()=> fetchAndApplyCandles(symbol, interval), POLL_INTERVAL_MS);
-}
-
-/* UI wiring */
-document.addEventListener('DOMContentLoaded', ()=>{
-  // create chart
-  createLightweightChart();
-
-  // UI nodes
-  const loadBtn = $('loadBtn');
-  const symbolInput = $('symbolInput');
-  const intervalSelect = $('intervalSelect');
-  const toggleTv = $('toggleTv');
-  const tvDiv = $('tv');
-  const tvFrame = $('tvFrame');
-  const themeBtn = $('themeBtn');
-  const fullscreenBtn = $('fullscreenBtn');
-
-  loadBtn.addEventListener('click', ()=>{
-    const symbol = symbolInput.value.trim() || 'XAUUSD';
-    const interval = intervalSelect.value;
-    setStatus('loading ' + symbol);
-    startPolling(symbol, interval);
-  });
-
-  // TradingView toggle - user must paste their widget URL manually if needed
-  toggleTv.addEventListener('click', ()=>{
-    if(tvDiv.classList.contains('hidden')){
-      // show tradingview: if the iframe src is empty, prompt user to paste widget URL
-      if(!tvFrame.src){
-        const url = prompt('Paste TradingView widget URL or iframe src (leave blank to cancel):');
-        if(url){
-          tvFrame.src = url;
-        } else {
-          return;
-        }
-      }
-      tvDiv.classList.remove('hidden');
-    } else {
-      tvDiv.classList.add('hidden');
-    }
-  });
-
-  // theme toggle (only for chart background text colors)
-  themeBtn.addEventListener('click', ()=>{
-    themeDark = !themeDark;
-    themeBtn.innerText = themeDark? 'Light' : 'Dark';
-    createLightweightChart(); // rebuild chart with new theme
-    // restart polling (series will be replaced)
-    const s = symbolInput.value.trim()||'XAUUSD';
-    startPolling(s, intervalSelect.value);
-  });
-
-  // fullscreen
-  fullscreenBtn.addEventListener('click', ()=>{
-    const el = $('chartContainer');
-    if(!document.fullscreenElement){
-      el.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
-    }
-    setTimeout(()=> window.dispatchEvent(new Event('resize')), 300);
-  });
-
-  // start initial fetch
-  const initialSymbol = $('symbolInput').value || 'XAUUSD';
-  startPolling(initialSymbol, $('intervalSelect').value);
-
-  log('Panel ready');
-});
-
-/* Cleanup before unload */
-window.addEventListener('beforeunload', ()=>{
-  if(apiTimer) clearInterval(apiTimer);
-});
-
-</script>
+  <!-- App script -->
+  <script src="./app.js"></script>
 </body>
 </html>
